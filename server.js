@@ -5,24 +5,27 @@ import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import morgan from "morgan";
-
+import cookieParser from 'cookie-parser';
 import { errorHandler, notFound } from "./middlewares/errorMiddleware.js";
 
 // Routes
 import categoryRoutes from "./routes/categoryRoutes.js";
-import electronicsRoutes from "./routes/electronicsRoutes.js";
-import clothingRoutes from "./routes/clothingRoutes.js";
-import furnitureRoutes from "./routes/furnitureRoutes.js";
-import groceryRoutes from "./routes/groceryRoutes.js";
-import homeKitchenRoutes from "./routes/homeKitchenRoutes.js";
-import stationeryRoutes from "./routes/stationeryRoutes.js";
 import productRoutes from "./routes/product.routes.js";
 import uploadRoutes from './routes/uploadRoutes.js';
+import authRoutes from "./routes/authRoutes.js"
+import cartRoutes from "./routes/cartRoutes.js"
+import orderRoutes from "./routes/orderRoutes.js"
+
+import paymentRoutes from "./routes/paymentRoutes.js"
+
+import checkoutRoutes from "./routes/checkoutRoutes.js"
+
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
+
 const PORT = process.env.PORT || 5000;
 const API_VERSION = process.env.API_VERSION || "v1";
 
@@ -80,16 +83,16 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // ===== API Routes =====
 app.use(`/api/${API_VERSION}/categories`, categoryRoutes);
-app.use(`/api/${API_VERSION}/products/electronics`, electronicsRoutes);
-app.use(`/api/${API_VERSION}/products/clothing`, clothingRoutes);
-app.use(`/api/${API_VERSION}/products/furniture`, furnitureRoutes);
-app.use(`/api/${API_VERSION}/products/grocery`, groceryRoutes);
-app.use(`/api/${API_VERSION}/products/homekitchen`, homeKitchenRoutes);
-app.use(`/api/${API_VERSION}/products/stationery`, stationeryRoutes);
 app.use(`/api/${API_VERSION}/products`, productRoutes);
 app.use(`/api/${API_VERSION}/upload`, uploadRoutes);
+app.use(`/api/${API_VERSION}/auth`, authRoutes);
+app.use(`/api/${API_VERSION}/cart`, cartRoutes);
+app.use(`/api/${API_VERSION}/orders`, orderRoutes);
+app.use(`/api/${API_VERSION}/payment`, paymentRoutes);
+app.use(`/api/${API_VERSION}/products"`, productRoutes);
+app.use(`/api/${API_VERSION}/checkout`, checkoutRoutes);
 
-// app.use(`/api/${API_VERSION}/products"`, productRoutes);
+
 // ===== Health Check =====
 app.get("/health", (req, res) => {
   res.status(200).json({
