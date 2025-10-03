@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.route('/')
     .get(protect, getCart) 
-    .post(addItemToCart); 
+    .post(protect, addItemToCart);  
 router.route('/:itemId')
     .put(protect, updateCartItem) // 
     .delete(protect, removeItemFromCart); 
