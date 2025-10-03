@@ -1,8 +1,7 @@
-// models/user.model.js
-
 import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs'; // ⚠️ এটি অবশ্যই ইন্সটল করুন: npm install bcryptjs
-import jwt from 'jsonwebtoken'; // ⚠️ এটি অবশ্যই ইন্সটল করুন: npm install jsonwebtoken
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 const userSchema = new mongoose.Schema(
   {
@@ -24,58 +23,147 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Password is required'],
       minlength: [6, 'Password must be at least 6 characters'],
-      select: false, // 🛑 যখনই ইউজারকে DB থেকে আনা হবে, তখন পাসওয়ার্ড দেখাবে না।
+      select: false,
+    },
+    phoneNumber: {
+      type: String,
+      trim: true,
     },
     role: {
       type: String,
       enum: ['user', 'admin', 'editor'],
       default: 'user',
     },
-    phoneNumber: {
+    isEmailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailVerificationOTP: String,
+    emailVerificationOTPExpire: Date,
+    resetPasswordOTP: String,
+    resetPasswordOTPExpire: Date,
+    profilePicture: {
       type: String,
-      trim: true,
+      default: '',
+    },
+    dateOfBirth: Date,
+    gender: {
+      type: String,
+      enum: ['male', 'female', 'other', ''],
+      default: '',
     },
     shippingAddress: [
       {
+        fullName: { type: String, required: true },
+        phoneNumber: { type: String, required: true },
         addressLine1: { type: String, required: true },
         addressLine2: { type: String },
         city: { type: String, required: true },
+        state: { type: String, required: true },
         zipCode: { type: String, required: true },
         country: { type: String, required: true, default: 'Bangladesh' },
         isDefault: { type: Boolean, default: false },
+        addressType: { 
+          type: String, 
+          enum: ['home', 'office', 'other'],
+          default: 'home'
+        },
       },
     ],
-    // কার্ট এর জন্য এখানে একটি রেফারেন্স রাখা যেতে পারে, অথবা আলাদা Cart মডেল ব্যবহার করা যায়।
+    preferences: {
+      newsletter: { type: Boolean, default: true },
+      smsNotifications: { type: Boolean, default: false },
+      emailNotifications: { type: Boolean, default: true },
+    },
+    lastLogin: Date,
+    loginCount: {
+      type: Number,
+      default: 0,
+    },
+    status: {
+      type: String,
+      enum: ['active', 'suspended', 'inactive'],
+      default: 'active',
+    },
   },
   {
     timestamps: true,
   }
 );
 
-// Mongoose Pre-Save Hook: পাসওয়ার্ড সেভ করার আগে হ্যাশ করুন
+// Hash password before saving
 userSchema.pre('save', async function (next) {
-  // যদি পাসওয়ার্ড ফিল্ড মডিফাই না হয়, তবে হ্যাশ করার দরকার নেই
   if (!this.isModified('password')) {
     return next();
   }
-
-  // নতুন পাসওয়ার্ড হ্যাশ করা
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
 
-// Instance Method: হ্যাশ করা পাসওয়ার্ড চেক করার জন্য
+// Update last login on successful login
+userSchema.methods.updateLoginInfo = function() {
+  this.lastLogin = new Date();
+  this.loginCount += 1;
+  return this.save();
+};
+
+// Match password
 userSchema.methods.matchPassword = async function (enteredPassword) {
-  // this.password এ select: false থাকায়, এই মেথড ব্যবহার করার আগে .select('+password') করতে হবে।
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// Instance Method: JWT টোকেন জেনারেট করার জন্য
+// Generate JWT token
 userSchema.methods.getSignedJwtToken = function () {
-  return jwt.sign({ id: this._id, role: this.role }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE,
-  });
+  return jwt.sign(
+    { 
+      id: this._id, 
+      role: this.role,
+      email: this.email 
+    }, 
+    process.env.JWT_SECRET, 
+    {
+      expiresIn: process.env.JWT_EXPIRE,
+    }
+  );
+};
+
+// Generate 6-digit OTP for email verification
+userSchema.methods.generateEmailVerificationOTP = function () {
+  const OTP = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+  
+  this.emailVerificationOTP = crypto
+    .createHash('sha256')
+    .update(OTP)
+    .digest('hex');
+    
+  this.emailVerificationOTPExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+  
+  return OTP;
+};
+
+// Generate 6-digit OTP for password reset
+userSchema.methods.generateResetPasswordOTP = function () {
+  const OTP = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+  
+  this.resetPasswordOTP = crypto
+    .createHash('sha256')
+    .update(OTP)
+    .digest('hex');
+    
+  this.resetPasswordOTPExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+  
+  return OTP;
+};
+
+// Check if email verification OTP is valid
+userSchema.methods.isEmailVerificationOTPValid = function() {
+  return this.emailVerificationOTPExpire > Date.now();
+};
+
+// Check if reset password OTP is valid
+userSchema.methods.isResetPasswordOTPValid = function() {
+  return this.resetPasswordOTPExpire > Date.now();
 };
 
 const User = mongoose.model('User', userSchema);
