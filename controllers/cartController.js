@@ -1,3 +1,5 @@
+// cartController.js
+
 import Cart from '../models/cart.model.js';
 import Product from '../models/product.model.js';
 
@@ -30,7 +32,7 @@ export const addItemToCart = async (req, res, next) => {
   console.log('User ID:', req.user?.id);
   console.log('Request Body:', req.body);
 
-  // ✅ Authorization চেক - protect middleware এটা handle করবে
+  // Authorization চেক - protect middleware এটা handle করবে
   if (!req.user || !req.user.id) {
     return res.status(401).json({ 
       success: false, 
@@ -39,7 +41,7 @@ export const addItemToCart = async (req, res, next) => {
   }
 
   try {
-    // ✅ প্রোডাক্ট খুঁজুন
+    // প্রোডাক্ট খুঁজুন
     const product = await Product.findById(productId);
     if (!product) {
       return res.status(404).json({ 
@@ -50,7 +52,7 @@ export const addItemToCart = async (req, res, next) => {
 
     console.log('✅ Product found:', product.name);
 
-    // ✅ প্রাইস এবং ভ্যারিয়েন্ট লজিক
+    // প্রাইস এবং ভ্যারিয়েন্ট লজিক
     let priceToUse = product.price; // ডিফল্ট calculated price (basePrice - discount)
     let variantSku = null;
 
@@ -84,7 +86,7 @@ export const addItemToCart = async (req, res, next) => {
 
     console.log('✅ Final price to use:', priceToUse);
 
-    // ✅ ইউজারের কার্ট খুঁজুন অথবা তৈরি করুন
+    // ইউজারের কার্ট খুঁজুন অথবা তৈরি করুন
     let cart = await Cart.findOne({ user: req.user.id });
 
     if (!cart) {
@@ -92,7 +94,7 @@ export const addItemToCart = async (req, res, next) => {
       console.log('✅ New cart created for user:', req.user.id);
     }
 
-    // ✅ নতুন আইটেম
+    // নতুন আইটেম
     const newItem = {
       product: productId,
       quantity,
@@ -104,7 +106,7 @@ export const addItemToCart = async (req, res, next) => {
       priceAtPurchase: priceToUse, 
     };
 
-    // ✅ চেক করুন: আইটেম কার্টে আছে কিনা
+    // চেক করুন: আইটেম কার্টে আছে কিনা
     const existingItem = cart.items.find(item => 
       item.product.toString() === productId &&
       item.variant.name === (variantName || null) &&
@@ -119,10 +121,10 @@ export const addItemToCart = async (req, res, next) => {
       console.log('✅ New item added to cart');
     }
 
-    // ✅ কার্ট সেভ করুন
+    // কার্ট সেভ করুন
     await cart.save();
     
-    // ✅ পপুলেট করে ফ্রন্টএন্ডে পাঠান
+    // পপুলেট করে ফ্রন্টএন্ডে পাঠান
     cart = await Cart.findById(cart._id).populate('items.product', 'name slug imageGroups');
 
     console.log('✅ Cart saved successfully, total items:', cart.items.length);
@@ -151,8 +153,11 @@ export const addItemToCart = async (req, res, next) => {
 // @desc    Update item quantity in cart
 // @route   PUT /api/v1/cart/:itemId
 // @access  Private
-export const updateCartItem = async (req, res, next) => {
+export const updateCartItem = async (req, res, next) => { 
   const { quantity } = req.body;
+  // Debugging
+  console.log('Update Cart Item ID:', req.params.itemId); 
+  console.log('Requested Quantity:', quantity);
     
   if (!req.user || !req.user.id) {
     return res.status(401).json({ 
@@ -161,38 +166,58 @@ export const updateCartItem = async (req, res, next) => {
     });
   }
 
-  if (quantity === 0) {
+  // ✅ Client side-e check kora holeo, server side-e confirm kora bhalo
+  if (quantity < 1) { 
     return res.status(400).json({ 
       success: false, 
-      message: 'Use DELETE to remove item. Quantity must be greater than 0.' 
+      message: 'Quantity must be at least 1. Use DELETE to remove item.' 
     });
   }
-
-  const cart = await Cart.findOne({ user: req.user.id });
-  if (!cart) {
-    return res.status(404).json({ 
-      success: false, 
-      message: 'Cart not found' 
-    });
-  }
-
-  // ✅ item ID ব্যবহার করে সাবডকুমেন্ট খোঁজা
-  const item = cart.items.id(req.params.itemId);
-  if (!item) {
-    return res.status(404).json({ 
-      success: false, 
-      message: 'Cart item not found' 
-    });
-  }
-
-  item.quantity = quantity;
-  await cart.save();
   
-  // ✅ Population সহ কার্ট আবার পাঠান
-  await cart.populate('items.product', 'name slug imageGroups');
+  try { // ✅ try block add kora holo
+    const cart = await Cart.findOne({ user: req.user.id });
+    if (!cart) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Cart not found' 
+      });
+    }
 
-  res.status(200).json({ success: true, cart });
+    // ✅ item ID ব্যবহার করে সাবডকুমেন্ট খোঁজা
+    // ei line e item.id() use kora holo, jeta Mongoose Subdocument ID find korar standard way.
+    const item = cart.items.id(req.params.itemId);
+    if (!item) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Cart item not found' 
+      });
+    }
+
+    item.quantity = quantity;
+    await cart.save(); // ✅ save() call korar shomoy kono validation error hole catch block e jabe
+    
+    // ✅ Population সহ কার্ট আবার পাঠান
+    await cart.populate('items.product', 'name slug imageGroups');
+
+    // ✅ Successful response
+    res.status(200).json({ success: true, cart });
+    
+  } catch (error) { // ✅ catch block add kora holo
+    console.error("❌ Cart Controller Update Error:", error);
+    
+    // Mongoose validation error handle
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ 
+        success: false, 
+        message: error.message 
+      });
+    }
+    
+    // General server error
+    next(error); 
+  }
 };
+
 
 // @desc    Remove item from cart
 // @route   DELETE /api/v1/cart/:itemId

@@ -8,74 +8,77 @@ const orderItemSchema = new mongoose.Schema({
   variant: { name: String, value: String, sku: String },
   quantity: { type: Number, required: true },
   price: { type: Number, required: true },
-  image: { type: String }, // অর্ডার সামারির জন্য
+  image: { type: String }
 });
 
+// ✅ আপডেটেড Shipping Address Schema
 const shippingAddressSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  phone: { type: String, required: true },
+  email: { type: String },
   addressLine1: { type: String, required: true },
   addressLine2: { type: String },
-  city: { type: String, required: true },
-  zipCode: { type: String, required: true },
-  country: { type: String, required: true },
+  district: { type: String, required: true }, // ✅ জেলা
+  upazila: { type: String, required: true }, // ✅ উপজেলা/থানা
+  zipCode: { type: String },
+  country: { type: String, default: 'Bangladesh' }
 });
 
 const paymentResultSchema = new mongoose.Schema({
-    id: { type: String }, // SSL Commerz Transaction ID (tran_id)
-    status: { type: String }, // Success, Failed, Cancelled
-    method: { type: String }, // SSL Commerz
-    // ... অন্যান্য পেমেন্ট তথ্য
+  id: { type: String },
+  status: { type: String },
+  method: { type: String }
 });
 
 const orderSchema = new mongoose.Schema(
   {
-    // যদি গেস্ট অর্ডার হয়, তবে user ফিল্ডটি null হবে
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      default: null,
+      default: null
     },
     isGuest: {
-        type: Boolean,
-        default: false,
+      type: Boolean,
+      default: false
     },
-    guestEmail: { // গেস্ট ইউজারের জন্য
-        type: String,
+    guestEmail: {
+      type: String
     },
     orderItems: [orderItemSchema],
     shippingAddress: shippingAddressSchema,
     paymentMethod: {
       type: String,
       required: true,
-      enum: ['COD', 'SSLCommerz'], // Cash on Delivery, SSL Commerz
+      enum: ['COD', 'SSLCommerz']
     },
     paymentResult: paymentResultSchema,
     shippingPrice: {
       type: Number,
       required: true,
-      default: 0.0,
+      default: 0.0
     },
     taxPrice: {
       type: Number,
       required: true,
-      default: 0.0,
+      default: 0.0
     },
     totalPrice: {
       type: Number,
       required: true,
-      default: 0.0,
+      default: 0.0
     },
     orderStatus: {
       type: String,
       required: true,
       enum: ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled', 'Failed'],
-      default: 'Pending',
+      default: 'Pending'
     },
     paidAt: {
-      type: Date,
-    },
+      type: Date
+    }
   },
   {
-    timestamps: true,
+    timestamps: true
   }
 );
 

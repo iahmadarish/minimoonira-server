@@ -9,7 +9,6 @@ const cartItemSchema = new mongoose.Schema(
       ref: 'Product',
       required: true,
     },
-    // যদি Product-এ Variants থাকে, তবে এই ফিল্ডে Variant এর ID/Value রাখা হবে
     variant: {
       name: String,
       value: String,
@@ -20,13 +19,12 @@ const cartItemSchema = new mongoose.Schema(
       required: true,
       min: [1, 'Quantity must be at least 1'],
     },
-    // বর্তমান মূল্য সংরক্ষণ, যাতে দাম পরিবর্তন হলেও অর্ডারে সমস্যা না হয়
     priceAtPurchase: {
       type: Number,
       required: true,
     },
   },
-  { _id: false } // Cart Item গুলোর জন্য আলাদা _id দরকার নেই
+  { _id: true } // ✅ _id enable করা হয়েছে
 );
 
 const cartSchema = new mongoose.Schema(
@@ -35,7 +33,7 @@ const cartSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      unique: true, // প্রতিটি ইউজারের জন্য শুধুমাত্র একটি কার্ট
+      unique: true,
     },
     items: [cartItemSchema],
     totalPrice: {
