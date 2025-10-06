@@ -1,15 +1,15 @@
-// data/districts.js - বাংলাদেশের সকল জেলা ও নমুনা উপজেলা
-
 export const districtsData = [
   {
     name: "Dhaka",
     upazilas: [
-      { name: "Dhaka City Corporation (Inside)", shippingZone: "dhaka_city" },
-      { name: "Dhaka City Corporation (Outside)", shippingZone: "dhaka_outside" },
-      { name: "Savar", shippingZone: "dhaka_outside" },
-      { name: "Keraniganj", shippingZone: "dhaka_outside" },
-      { name: "Dhamrai", shippingZone: "dhaka_outside" }
-    ]
+    { name: "Dhaka City Corporation (North)", shippingZone: "dhaka_city" },
+    { name: "Dhaka City Corporation (South)", shippingZone: "dhaka_city" },
+    { name: "Dhamrai", shippingZone: "dhaka_outside" },
+    { name: "Dohar", shippingZone: "dhaka_outside" },
+    { name: "Keraniganj", shippingZone: "dhaka_outside" },
+    { name: "Nawabganj", shippingZone: "dhaka_outside" },
+    { name: "Savar", shippingZone: "dhaka_outside" }
+  ]
   },
   {
     name: "Chattogram",
