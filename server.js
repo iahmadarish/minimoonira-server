@@ -47,13 +47,17 @@ connectDB();
 // ===== Security Middlewares =====
 app.use(helmet());
 
-const allowedOrigins = ['https://minimoonira.vercel.app', 'http://localhost:5173', 'http://localhost:5174'];
+const allowedOrigins = ['https://minimoonira.vercel.app', 'http://localhost:5173', 'http://localhost:5174', 'https://sandbox.sslcommerz.com','https://securepay.sslcommerz.com' ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
     
+    // 🚀 সমাধান: যদি Origin 'null' হয় (পেমেন্ট গেটওয়ে বা IPN এর ক্ষেত্রে ঘটে), তবে অনুমতি দাও
+    if (!origin || origin === 'null') {
+      return callback(null, true);
+    } 
+    
+    // যদি OriginallowedOrigins এ থাকে, তবে অনুমতি দাও
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -63,7 +67,6 @@ app.use(cors({
     }
   },
   credentials: true,
-  // 🚨 IMPORTANT: Explicitly allow the Authorization header for JWT tokens
   allowedHeaders: ['Content-Type', 'Authorization'], 
 }));
 
@@ -75,19 +78,6 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 if (process.env.NODE_ENV !== "production") {
   app.use(morgan("dev"));
 }
-
-// Rate limiting (commented out)
-// const limiter = rateLimit({
-//   windowMs: 15 * 60 * 1000, // 15 minutes
-//   max: 100, // max requests per IP
-//   message: "⚠️ Too many requests from this IP, please try again later.",
-// });
-
-// app.use("/api/", limiter);
-
-// ===== Body Parsers (Redundant, kept for consistency but better to use one set) =====
-// app.use(express.json({ limit: "10mb" }));
-// app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // ===== API Routes =====
 app.use(`/api/${API_VERSION}/categories`, categoryRoutes);
