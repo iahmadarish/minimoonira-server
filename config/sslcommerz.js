@@ -1,21 +1,18 @@
-// config/sslcommerz.js
 
 import axios from "axios";
 import qs from "qs";
 import dotenv from "dotenv";
 dotenv.config();
 
-// ⚠️ শুধুমাত্র টেস্টিং এর জন্য হার্ডকোডেড ক্রেডেনশিয়াল! 
+
 const STORE_ID = 'minim68ed493379d49';
 const STORE_PASS = 'minim68ed493379d49@ssl'; 
 const IS_LIVE = process.env.NODE_ENV === 'production'; 
 
-// SSL Commerz API URLS (পেমেন্ট ইনিসিয়েশনের জন্য)
 const API_URL = IS_LIVE 
   ? 'https://securepay.sslcommerz.com/gwprocess/v4/api.php'
   : 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php';
 
-// 🚀 ভেরিফিকেশনের জন্য সঠিক RESTful endpoint ব্যবহার করা হলো
 const VALIDATION_URL = IS_LIVE
   ? 'https://securepay.sslcommerz.com/validator/api/validationserverAPI.php'
   : 'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php';
@@ -23,7 +20,6 @@ const VALIDATION_URL = IS_LIVE
 
 export const initializePayment = async (orderId, paymentData) => {
   if (!STORE_ID || !STORE_PASS) {
-    // যেহেতু আপনি হার্ডকোড করেছেন, এই এররটি আর আসা উচিত নয়
     throw new Error('SSL Commerz credentials missing from .env file');
   }
 
@@ -86,7 +82,6 @@ export const verifyPayment = async (val_id, tran_id, amount) => {
   };
 
   try {
-    // ✅ SSLCommerz requires GET request for validation
     const response = await axios.get(VALIDATION_URL, { params });
     const result = response.data;
 
@@ -97,12 +92,12 @@ export const verifyPayment = async (val_id, tran_id, amount) => {
     ) {
       return { isValid: true, data: result };
     } else {
-      console.error('❌ SSLCommerz Verification Failed:', result);
+      console.error('SSLCommerz Verification Failed:', result);
       return { isValid: false, data: result };
     }
   } catch (error) {
     console.error(
-      '❌ SSLCommerz Verification API Error:',
+      'SSLCommerz Verification API Error:',
       error.response ? error.response.data : error.message
     );
     return { isValid: false, error: error.message };
