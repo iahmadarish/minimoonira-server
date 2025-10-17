@@ -5,8 +5,8 @@ import dotenv from "dotenv";
 dotenv.config();
 
 
-const STORE_ID = 'minim68ed493379d49';
-const STORE_PASS = 'minim68ed493379d49@ssl'; 
+const STORE_ID = 'minim68f1d3547189f';
+const STORE_PASS = 'minim68f1d3547189f@ssl'; 
 const IS_LIVE = process.env.NODE_ENV === 'production'; 
 
 const API_URL = IS_LIVE 
