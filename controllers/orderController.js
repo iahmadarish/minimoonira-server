@@ -66,8 +66,6 @@ export const createOrder = async (req, res, next) => {
 
     let orderItems = [];
     let user = null;
-
-    // --- ২. অর্ডার আইটেম লোড করা (Guest বা Registered User অনুযায়ী) ---
     if (isGuest) {
       if (!guestEmail || !guestItems || guestItems.length === 0) {
         return res.status(400).json({ 
@@ -75,8 +73,6 @@ export const createOrder = async (req, res, next) => {
           message: 'Guest email and items are required' 
         });
       }
-
-      // Guest Items কে OrderItem Schema অনুযায়ী ম্যাপ করা
       orderItems = guestItems.map(item => ({
         name: item.name,
         product: item.productId,
@@ -94,7 +90,7 @@ export const createOrder = async (req, res, next) => {
       }
 
       user = req.user.id;
-      const cart = await Cart.findOne({ user }).populate('items.product');
+      const cart = await Cart.findOne({ user }).populate('items.product', 'name slug imageGroups');
       
       if (!cart || cart.items.length === 0) {
         return res.status(400).json({ 
@@ -103,27 +99,20 @@ export const createOrder = async (req, res, next) => {
         });
       }
 
-      // Cart Items কে OrderItem Schema অনুযায়ী ম্যাপ করা
       orderItems = cart.items.map(item => ({
         name: item.product.name,
         product: item.product._id,
         variant: item.variant || {},
         quantity: item.quantity,
-        price: item.priceAtPurchase, // কেনার সময়কার দাম সেভ করা হয়েছে
-        image: item.product.imageGroups?.[0]?.url || ''
+        price: item.priceAtPurchase,
+        image: item.product.imageGroups?.[0]?.images?.[0]?.url || ''
       }));
     }
-
-    // --- ৩. মূল্য গণনা ---
     const itemsPrice = orderItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-    
-    // শিপিং মূল্য যদি ফ্রন্টএন্ড থেকে না আসে বা ভ্যালিডেট করতে চান, এই ফাংশনটি ব্যবহার করুন:
-    // const calculatedShippingPrice = calculateShippingPrice(shippingAddress.district, itemsPrice);
-    const finalShippingPrice = shippingPrice || 0; // আপনার ফ্রন্টএন্ড থেকে আসা মূল্য ব্যবহার করা হলো
+
+    const finalShippingPrice = shippingPrice || 0; 
     
     const totalPrice = itemsPrice + finalShippingPrice + (taxPrice || 0);
-
-    // --- ৪. অর্ডার তৈরি ---
     const newOrder = new Order({
       user: isGuest ? null : user,
       isGuest,
@@ -135,34 +124,25 @@ export const createOrder = async (req, res, next) => {
       taxPrice: taxPrice || 0,
       totalPrice,
       orderStatus: 'Pending',
-      paymentStatus: 'Pending' // COD এবং SSLCommerz উভয়ের জন্যই প্রাথমিক স্ট্যাটাস 'Pending'
+      paymentStatus: 'Pending'
     });
 
     await newOrder.save();
-    
-    // --- ৫. পেমেন্ট মেথড অনুযায়ী লজিক ---
     if (paymentMethod === 'SSLCommerz') {
         const paymentData = {
             amount: totalPrice,
             cus_name: shippingAddress.name,
-            // ⚠️ যদি email না থাকে, তবে একটি ডামি ইমেইল ব্যবহার করুন
             cus_email: shippingAddress.email || newOrder.guestEmail || 'customer@example.com', 
             cus_phone: shippingAddress.phone,
             shippingAddress: shippingAddress,
-            // ... অন্যান্য ডেটা যা initializePayment ফাংশনে লাগবে
         };
 
         const paymentInit = await initializePayment(newOrder._id.toString(), paymentData);
 
         if (paymentInit.status === 'SUCCESS' && paymentInit.GatewayPageURL) {
-            // অনলাইন পেমেন্টের ক্ষেত্রে:
-            // ১. স্টক আপডেট IPN কলব্যাকে করা হবে (নিরাপদ পদ্ধতি)।
-            // ২. রেজিস্টার্ড ইউজার হলে কার্ট ক্লিয়ার করা হবে।
             if (!isGuest && req.user) {
                 await Cart.findOneAndDelete({ user: req.user.id });
             }
-
-            // ক্লায়েন্টকে SSL Commerz এর পেমেন্ট গেটওয়েতে রিডাইরেক্ট করার জন্য URL পাঠানো হলো
             return res.status(201).json({
                 success: true,
                 message: 'Payment initialized. Redirecting to gateway.',
@@ -170,10 +150,7 @@ export const createOrder = async (req, res, next) => {
                 redirectUrl: paymentInit.GatewayPageURL 
             });
         } else {
-             // পেমেন্ট ইনিশিয়ালাইজেশন ব্যর্থ হলে
             console.error('SSLCommerz initialization failed:', paymentInit);
-            
-            // অর্ডারটিকে 'Cancelled' বা 'Failed' হিসাবে চিহ্নিত করা হলো
             newOrder.orderStatus = 'Cancelled';
             newOrder.paymentStatus = 'Failed';
             await newOrder.save();
@@ -184,13 +161,7 @@ export const createOrder = async (req, res, next) => {
             });
         }
     } else if (paymentMethod === 'COD') {
-        // COD এর জন্য:
-        // ১. অর্ডার স্ট্যাটাস 'Pending' থাকবে
-        // ২. পেমেন্ট স্ট্যাটাস 'Pending' থাকবে
-        // ৩. স্টক আপডেট করতে হবে
         await updateProductStock(orderItems, 'decrease');
-
-        // ৪. রেজিস্টার্ড ইউজার হলে কার্ট ক্লিয়ার
         if (!isGuest && req.user) {
             await Cart.findOneAndDelete({ user: req.user.id });
         }
@@ -201,8 +172,6 @@ export const createOrder = async (req, res, next) => {
             order: newOrder 
         });
     } else {
-        // অন্য কোনো অজানা পেমেন্ট মেথড
-        // অর্ডারটিকে 'Cancelled' করে দেওয়া হলো
         newOrder.orderStatus = 'Cancelled';
         newOrder.paymentStatus = 'Failed';
         await newOrder.save();
