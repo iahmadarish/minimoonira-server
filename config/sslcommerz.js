@@ -6,8 +6,8 @@ import dotenv from "dotenv";
 dotenv.config();
 
 // ⚠️ শুধুমাত্র টেস্টিং এর জন্য হার্ডকোডেড ক্রেডেনশিয়াল! 
-const STORE_ID = 'minim68f1d3547189f';
-const STORE_PASS = 'minim68f1d3547189f@ssl'; 
+const STORE_ID = 'minim68ed493379d49';
+const STORE_PASS = 'minim68ed493379d49@ssl'; 
 const IS_LIVE = process.env.NODE_ENV === 'production'; 
 
 // SSL Commerz API URLS (পেমেন্ট ইনিসিয়েশনের জন্য)
