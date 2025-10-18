@@ -185,102 +185,103 @@ if (req.body.variants && Array.isArray(req.body.variants) && req.body.variants.l
 
 // Get all products with filtering and pagination
 export const getProducts = async (req, res) => {
-  try {
-    const {
-      page = 1,
-      limit = 10,
-      search,
-      category,
-      minPrice,
-      maxPrice,
-      brand,
-      isFeatured,
-      isActive,
-      sortBy = "createdAt",
-      sortOrder = "desc"
-    } = req.query;
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      category,
+      minPrice,
+      maxPrice,
+      brand,
+      isFeatured,
+      isActive,
+      sortBy = "createdAt",
+      sortOrder = "desc"
+    } = req.query;
 
-    // Build filter object
-    let filter = {};
-    
-    if (search) {
-      const searchRegex = new RegExp(search, 'i');
-filter.$or = [
-        // 1. Full-Text Search (Uses Text Index for faster keyword matching)
-        { $text: { $search: search } }, 
-        // 2. Partial/Keyword Search (Uses Regex for flexibility, slower but robust)
+    // Build filter object
+    let filter = {};
+    
+    if (search) {
+      const searchRegex = new RegExp(search, 'i');
+      
+      // ✅ শুধুমাত্র $regex ব্যবহার করে নিরাপদ Partial Match Search
+      filter.$or = [
         { name: { $regex: searchRegex } },
         { brand: { $regex: searchRegex } },
         { slug: { $regex: searchRegex } },
       ];
-      
-      // filter.$text = { $search: search };
-    }
-    
-    if (category) {
-      filter.category = category;
-    }
-    
-    if (minPrice || maxPrice) {
-      filter.price = {};
-      if (minPrice) filter.price.$gte = Number(minPrice);
-      if (maxPrice) filter.price.$lte = Number(maxPrice);
-    }
-    
-    if (brand) {
-      filter.brand = new RegExp(brand, "i");
-    }
-    
-    if (isFeatured !== undefined) {
-      filter.isFeatured = isFeatured === "true";
-    }
-    
-    if (isActive !== undefined) {
-      filter.isActive = isActive === "true";
-    }
+    }
+    
+    // If other filters exist, MongoDB will AND them with the $or block above.
+    
+    if (category) {
+      filter.category = category;
+    }
+    
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) filter.price.$gte = Number(minPrice);
+      if (maxPrice) filter.price.$lte = Number(maxPrice);
+    }
+    
+    if (brand && !search) {
+      // brand filter শুধুমাত্র তখনই যোগ করা হবে, যখন এটি search query-এর অংশ নয়
+      filter.brand = new RegExp(brand, "i");
+    }
+    
+    if (isFeatured !== undefined) {
+      filter.isFeatured = isFeatured === "true";
+    }
+    
+    if (isActive !== undefined) {
+      filter.isActive = isActive === "true";
+    }
 
-    // Sort options
-    const sortOptions = {};
-    sortOptions[sortBy] = sortOrder === "desc" ? -1 : 1;
+    // Sort options
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === "desc" ? -1 : 1;
 
-    // Execute query with pagination
-     const products = await Product.find(filter)
-      .populate({
-        path: "category",
-        populate: {
-          path: "parentCategory",
-          populate: { path: "parentCategory" } // Multiple levels
-        }
-      })
-      .populate({
-        path: "subCategory", 
-        populate: {
-          path: "parentCategory",
-          populate: { path: "parentCategory" } // Multiple levels
-        }
-      })
-      .sort(sortOptions)
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
+    // Execute query with pagination
+     const products = await Product.find(filter)
+      // ... (populate options remains the same) ...
+      .populate({
+        path: "category",
+        populate: {
+          path: "parentCategory",
+          populate: { path: "parentCategory" }
+        }
+      })
+      .populate({
+        path: "subCategory", 
+        populate: {
+          path: "parentCategory",
+          populate: { path: "parentCategory" }
+        }
+      })
+      .sort(sortOptions)
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
 
-    // Get total count for pagination
-    const total = await Product.countDocuments(filter);
+    // Get total count for pagination
+    const total = await Product.countDocuments(filter);
 
-    res.status(200).json({
-      success: true,
-      products,
-      totalPages: Math.ceil(total / limit),
-      currentPage: Number(page),
-      total
-    });
-  } catch (error) {
-    console.error('Error fetching products:', error);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching products",
-      error: error.message
-    });
-  }
+    res.status(200).json({
+      success: true,
+      products,
+      totalPages: Math.ceil(total / limit),
+      currentPage: Number(page),
+      total
+    });
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching products",
+      error: error.message
+    });
+  }
 };
 
 // Get a single product by ID
