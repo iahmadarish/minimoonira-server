@@ -224,4 +224,19 @@ productSchema.virtual('isOnSale').get(function() {
          now <= this.discountEnd;
 });
 
+
+productSchema.index({ 
+    name: "text", 
+    description: "text", 
+    brand: "text", 
+    slug: "text" 
+}, { 
+    weights: {
+        name: 10,
+        slug: 5,
+        description: 2,
+        brand: 3
+    }
+});
+
 export default mongoose.model("Product", productSchema);

@@ -204,7 +204,17 @@ export const getProducts = async (req, res) => {
     let filter = {};
     
     if (search) {
-      filter.$text = { $search: search };
+      const searchRegex = new RegExp(search, 'i');
+filter.$or = [
+        // 1. Full-Text Search (Uses Text Index for faster keyword matching)
+        { $text: { $search: search } }, 
+        // 2. Partial/Keyword Search (Uses Regex for flexibility, slower but robust)
+        { name: { $regex: searchRegex } },
+        { brand: { $regex: searchRegex } },
+        { slug: { $regex: searchRegex } },
+      ];
+      
+      // filter.$text = { $search: search };
     }
     
     if (category) {
