@@ -20,6 +20,8 @@ import paymentRoutes from "./routes/paymentRoutes.js"
 
 import checkoutRoutes from "./routes/checkoutRoutes.js"
 import adminOrderRoutes from './routes/adminOrderRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
+// import adminRoutes from './routes/adminRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -89,7 +91,8 @@ app.use(`/api/${API_VERSION}/orders`, orderRoutes);
 app.use(`/api/${API_VERSION}/payment`, paymentRoutes);
 app.use(`/api/${API_VERSION}/checkout`, checkoutRoutes);
 app.use('/api/v1/admin/orders', adminOrderRoutes);
-
+app.use('/api/v1/admin/analytics', analyticsRoutes);
+// app.use('/api/v1/admin', adminRoutes);
 // ===== Health Check =====
 app.get("/health", (req, res) => {
   res.status(200).json({
