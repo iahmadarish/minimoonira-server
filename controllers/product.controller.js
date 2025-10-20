@@ -36,6 +36,7 @@ export const createProduct = async (req, res) => {
     // Parse numeric fields to ensure they're numbers
     const productData = {
       ...req.body,
+      aPlusContent: req.body.aPlusContent || '',
       basePrice: parseFloat(req.body.basePrice) || 0,
       discountPercentage: parseFloat(req.body.discountPercentage) || 0,
       stock: parseInt(req.body.stock) || 0,
@@ -58,6 +59,7 @@ export const createProduct = async (req, res) => {
       productData.variants = req.body.variants.map(variant => ({
         name: variant.name,
         value: variant.value,
+        color: variant.color || null,
         basePrice: parseFloat(variant.basePrice) || parseFloat(req.body.basePrice) || 0,
         discountPercentage: parseFloat(variant.discountPercentage) || 0,
         discountStart: variant.discountStart || null,
@@ -72,10 +74,10 @@ export const createProduct = async (req, res) => {
     if (req.body.imageGroups && Array.isArray(req.body.imageGroups)) {
       productData.imageGroups = req.body.imageGroups.map(group => ({
         name: group.name,
-        images: group.images || []
+        images: group.images || [],
+        color: image.color || null
       }));
     } else {
-      // Default image group যদি না থাকে
       productData.imageGroups = [{
         name: 'Main',
         images: []
@@ -358,6 +360,7 @@ export const updateProduct = async (req, res) => {
     // Same data processing as create
     const productData = {
       ...req.body,
+      aPlusContent: req.body.aPlusContent || '', // ✅ A-Plus Content যোগ
       basePrice: parseFloat(req.body.basePrice) || 0,
       discountPercentage: parseFloat(req.body.discountPercentage) || 0,
       stock: parseInt(req.body.stock) || 0,
@@ -372,13 +375,79 @@ export const updateProduct = async (req, res) => {
         height: parseFloat(req.body.dimensions.height) || 0
       };
     }
+    
+    // Handle image groups with new 'color' field
+    if (req.body.imageGroups && Array.isArray(req.body.imageGroups)) {
+      productData.imageGroups = req.body.imageGroups.map(group => ({
+        name: group.name,
+        images: (group.images || []).map(image => ({
+          ...image,
+          color: image.color || null // ✅ ইমেজ কালার যোগ
+        }))
+      }));
+    }
 
+    // Handle variants with new 'color' field
+    if (req.body.variants && Array.isArray(req.body.variants) && req.body.variants.length > 0) {
+      productData.hasVariants = true;
+      productData.variants = req.body.variants.map(variant => ({
+        name: variant.name,
+        value: variant.value,
+        color: variant.color || null, // ✅ ভ্যারিয়েন্ট কালার যোগ
+        basePrice: parseFloat(variant.basePrice) || parseFloat(req.body.basePrice) || 0,
+        discountPercentage: parseFloat(variant.discountPercentage) || 0,
+        discountStart: variant.discountStart || null,
+        discountEnd: variant.discountEnd || null,
+        stock: parseInt(variant.stock) || 0,
+        imageGroupName: variant.imageGroupName || '',
+        sku: variant.sku || ''
+      }));
+    } else if (req.body.variants !== undefined) {
+        // If variants are explicitly set to empty or null, update hasVariants
+        productData.hasVariants = false;
+        productData.variants = [];
+    }
+
+
+    // Handle discount dates
     if (req.body.discountStart) {
-      productData.discountStart = new Date(req.body.discountStart);
+      const startDate = new Date(req.body.discountStart);
+      productData.discountStart = isNaN(startDate.getTime()) ? null : startDate;
+    } else if (req.body.discountStart !== undefined) {
+      productData.discountStart = null;
     }
+    
     if (req.body.discountEnd) {
-      productData.discountEnd = new Date(req.body.discountEnd);
+      const endDate = new Date(req.body.discountEnd);
+      productData.discountEnd = isNaN(endDate.getTime()) ? null : endDate;
+    } else if (req.body.discountEnd !== undefined) {
+      productData.discountEnd = null;
     }
+    
+    // Handle variant discount dates (Only if variants were in the request body)
+    if (req.body.variants && Array.isArray(req.body.variants) && req.body.variants.length > 0) {
+      productData.variants = productData.variants.map(variant => {
+        let variantDiscountStart = null;
+        let variantDiscountEnd = null;
+        
+        if (variant.discountStart) {
+          const startDate = new Date(variant.discountStart);
+          variantDiscountStart = isNaN(startDate.getTime()) ? null : startDate;
+        }
+        
+        if (variant.discountEnd) {
+          const endDate = new Date(variant.discountEnd);
+          variantDiscountEnd = isNaN(endDate.getTime()) ? null : endDate;
+        }
+        
+        return {
+          ...variant,
+          discountStart: variantDiscountStart,
+          discountEnd: variantDiscountEnd
+        };
+      });
+    }
+
 
     const product = await Product.findByIdAndUpdate(
       req.params.id,

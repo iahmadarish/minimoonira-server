@@ -5,6 +5,7 @@ const imageSchema = new mongoose.Schema(
     url: { type: String, required: true },
     public_id: { type: String },
     alt: { type: String, trim: true },
+    color: { type: String, trim: true },
   },
   { _id: false }
 );
@@ -13,6 +14,7 @@ const variantSchema = new mongoose.Schema(
   {
     name: { type: String, trim: true, required: true },
     value: { type: String, trim: true, required: true },
+    color: { type: String, trim: true, sparse: true },
     basePrice: { type: Number, min: 0 },
     discountPercentage: { type: Number, min: 0, max: 100, default: 0 },
     discountStart: { type: Date },
@@ -41,6 +43,7 @@ const productSchema = new mongoose.Schema(
       // Remove required: true, let pre-save hook handle it
     },
     description: { type: String, trim: true },
+    aPlusContent: { type: String },
     brand: { type: String, trim: true, default: "Generic" },
     sku: { type: String, unique: true, sparse: true },
     category: { 
