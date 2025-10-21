@@ -540,3 +540,131 @@ export const logout = (req, res, next) => {
     message: 'Logged out successfully',
   });
 };
+
+
+export const addShippingAddress = async (req, res, next) => {
+  try {
+    const newAddress = req.body;
+
+    // Check if the new address is marked as default
+    if (newAddress.isDefault) {
+      // Find the user and unset the 'isDefault' flag from all existing addresses
+      await User.updateOne(
+        { _id: req.user.id, 'shippingAddress.isDefault': true },
+        { $set: { 'shippingAddress.$.isDefault': false } }
+      );
+    }
+    
+    // Add the new address to the array
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $push: { shippingAddress: newAddress } },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    res.status(200).json({
+      success: true,
+      message: 'Shipping address added successfully',
+      user: user.toObject(),
+    });
+  } catch (error) {
+    console.error('❌ Add shipping address error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during adding address',
+    });
+  }
+};
+
+// @desc    Update an existing shipping address
+// @route   PUT /api/v1/auth/address/:addressId
+// @access  Private
+export const updateShippingAddress = async (req, res, next) => {
+  try {
+    const { addressId } = req.params;
+    const updateData = req.body;
+    let user;
+
+    // 1. If the updated address is set as default, first unset default from others
+    if (updateData.isDefault) {
+      await User.updateOne(
+        { _id: req.user.id, 'shippingAddress.isDefault': true },
+        { $set: { 'shippingAddress.$.isDefault': false } }
+      );
+    }
+
+    // 2. Update the specific address
+    user = await User.findOneAndUpdate(
+      { _id: req.user.id, 'shippingAddress._id': addressId },
+      {
+        $set: {
+          'shippingAddress.$.fullName': updateData.fullName,
+          'shippingAddress.$.phoneNumber': updateData.phoneNumber,
+          'shippingAddress.$.addressLine1': updateData.addressLine1,
+          'shippingAddress.$.addressLine2': updateData.addressLine2,
+          'shippingAddress.$.city': updateData.city,
+          'shippingAddress.$.state': updateData.state,
+          'shippingAddress.$.zipCode': updateData.zipCode,
+          'shippingAddress.$.country': updateData.country,
+          'shippingAddress.$.isDefault': updateData.isDefault || false,
+          'shippingAddress.$.addressType': updateData.addressType,
+        }
+      },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Address not found or unauthorized'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Shipping address updated successfully',
+      user: user.toObject(),
+    });
+
+  } catch (error) {
+    console.error('❌ Update shipping address error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during updating address',
+    });
+  }
+};
+
+// @desc    Delete a shipping address
+// @route   DELETE /api/v1/auth/address/:addressId
+// @access  Private
+export const deleteShippingAddress = async (req, res, next) => {
+  try {
+    const { addressId } = req.params;
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $pull: { shippingAddress: { _id: addressId } } },
+      { new: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Address not found or unauthorized'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Shipping address deleted successfully',
+      user: user.toObject(),
+    });
+  } catch (error) {
+    console.error('❌ Delete shipping address error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during deleting address',
+    });
+  }
+};

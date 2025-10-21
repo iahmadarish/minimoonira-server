@@ -9,6 +9,9 @@ import {
   forgotPassword,
   resetPassword,
   updateProfile,
+  addShippingAddress,
+  updateShippingAddress,
+  deleteShippingAddress,
 } from '../controllers/authController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 
@@ -26,5 +29,8 @@ router.put('/reset-password', resetPassword);
 router.get('/logout', protect, logout);
 router.get('/me', protect, getMe);
 router.put('/profile', protect, updateProfile);
+router.post('/address', protect, addShippingAddress);
+router.put('/address/:addressId', protect, updateShippingAddress);
+router.delete('/address/:addressId', protect, deleteShippingAddress);
 
 export default router;
