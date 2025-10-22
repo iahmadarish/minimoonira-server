@@ -695,16 +695,20 @@ export const updateOrderDetails = async (req, res, next) => {
       orderId: req.params.id,
       itemsCount: orderItems?.length,
       shippingPrice,
-      taxPrice
+      taxPrice,
+      user: req.user.id
     });
 
     // ✅ Order খুঁজে আনুন (orderNumber বা _id দিয়ে)
-    let order = await Order.findOne({ 
-      $or: [
-        { _id: req.params.id },
-        { orderNumber: req.params.id }
-      ]
-    });
+    let order;
+    
+    // Check if it's a valid ObjectId
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      order = await Order.findById(req.params.id);
+    } else {
+      // If not ObjectId, try with orderNumber
+      order = await Order.findOne({ orderNumber: req.params.id });
+    }
 
     if (!order) {
       return res.status(404).json({
@@ -713,30 +717,47 @@ export const updateOrderDetails = async (req, res, next) => {
       });
     }
 
+    console.log('✅ Order found:', order.orderNumber);
+
     // Update order fields
     if (shippingAddress) {
-      order.shippingAddress = { ...order.shippingAddress, ...shippingAddress };
+      order.shippingAddress = { 
+        ...order.shippingAddress, 
+        ...shippingAddress 
+      };
+      console.log('📍 Shipping address updated');
     }
 
-    if (orderItems) {
+    if (orderItems && Array.isArray(orderItems)) {
       order.orderItems = orderItems.map(item => ({
-        ...item,
-        // Ensure product field is properly handled
-        product: item.productId || item.product
+        name: item.name,
+        product: item.productId || item.product,
+        variant: item.variant || {},
+        quantity: parseInt(item.quantity) || 1,
+        price: parseFloat(item.price) || 0,
+        image: item.image || '',
+        _id: item._id || new mongoose.Types.ObjectId()
       }));
+      console.log('📦 Order items updated:', orderItems.length);
     }
 
     if (shippingPrice !== undefined) {
       order.shippingPrice = parseFloat(shippingPrice) || 0;
+      console.log('🚚 Shipping price updated:', order.shippingPrice);
     }
 
     if (taxPrice !== undefined) {
       order.taxPrice = parseFloat(taxPrice) || 0;
+      console.log('💰 Tax price updated:', order.taxPrice);
     }
 
     // Recalculate total price
-    const itemsTotal = order.orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const itemsTotal = order.orderItems.reduce((sum, item) => {
+      return sum + (item.price * item.quantity);
+    }, 0);
+    
     order.totalPrice = itemsTotal + order.shippingPrice + order.taxPrice;
+    console.log('🧮 Total price recalculated:', order.totalPrice);
 
     // Add to status history
     order.statusHistory.push({

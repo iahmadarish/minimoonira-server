@@ -17,7 +17,7 @@ import { protect, admin } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
-// Public/User routes
+// ==================== USER ROUTES ====================
 router.route('/')
   .post(protect, createOrder)
   .get(protect, getMyOrders);
@@ -25,17 +25,18 @@ router.route('/')
 router.route('/:id')
   .get(protect, getOrderById);
 
-// Admin routes
+// ==================== ADMIN ROUTES ====================
 router.route('/admin/orders')
   .get(protect, admin, getAllOrders);
 
 router.route('/admin/orders/stats')
   .get(protect, admin, getOrderStats);
 
-// ✅ এই route গুলো নিশ্চিত করুন
+// ✅ IMPORTANT: এই route টি নিশ্চিত করুন
 router.route('/admin/orders/:id')
   .get(protect, admin, getOrderByIdAdmin)
-  .put(protect, admin, updateOrderDetails); // ✅ নতুন route যোগ করুন
+  .put(protect, admin, updateOrderDetails) // ✅ নতুন route
+  .delete(protect, admin, deleteOrder);
 
 router.route('/admin/orders/:id/status')
   .put(protect, admin, updateOrderStatus);
@@ -45,8 +46,5 @@ router.route('/admin/orders/:id/payment')
 
 router.route('/admin/orders/:id/notes')
   .post(protect, admin, addAdminNote);
-
-router.route('/admin/orders/:id')
-  .delete(protect, admin, deleteOrder);
 
 export default router;
