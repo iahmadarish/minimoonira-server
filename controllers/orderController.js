@@ -680,6 +680,7 @@ export const getOrderByIdAdmin = async (req, res, next) => {
   }
 };
 
+// controllers/orderController.js - এই ফাংশনটি যোগ করুন
 export const updateOrderDetails = async (req, res, next) => {
   try {
     const {
@@ -697,7 +698,14 @@ export const updateOrderDetails = async (req, res, next) => {
       taxPrice
     });
 
-    const order = await Order.findById(req.params.id);
+    // ✅ Order খুঁজে আনুন (orderNumber বা _id দিয়ে)
+    let order = await Order.findOne({ 
+      $or: [
+        { _id: req.params.id },
+        { orderNumber: req.params.id }
+      ]
+    });
+
     if (!order) {
       return res.status(404).json({
         success: false,
@@ -711,15 +719,19 @@ export const updateOrderDetails = async (req, res, next) => {
     }
 
     if (orderItems) {
-      order.orderItems = orderItems;
+      order.orderItems = orderItems.map(item => ({
+        ...item,
+        // Ensure product field is properly handled
+        product: item.productId || item.product
+      }));
     }
 
     if (shippingPrice !== undefined) {
-      order.shippingPrice = shippingPrice;
+      order.shippingPrice = parseFloat(shippingPrice) || 0;
     }
 
     if (taxPrice !== undefined) {
-      order.taxPrice = taxPrice;
+      order.taxPrice = parseFloat(taxPrice) || 0;
     }
 
     // Recalculate total price
@@ -740,7 +752,7 @@ export const updateOrderDetails = async (req, res, next) => {
     await order.populate('user', 'name email');
     await order.populate('statusHistory.updatedBy', 'name');
 
-    console.log('✅ Order updated successfully');
+    console.log('✅ Order updated successfully:', order.orderNumber);
 
     res.status(200).json({
       success: true,
@@ -755,6 +767,13 @@ export const updateOrderDetails = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Invalid order ID'
+      });
+    }
+
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: error.message
       });
     }
 
