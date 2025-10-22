@@ -680,3 +680,87 @@ export const getOrderByIdAdmin = async (req, res, next) => {
   }
 };
 
+export const updateOrderDetails = async (req, res, next) => {
+  try {
+    const {
+      shippingAddress,
+      orderItems,
+      shippingPrice,
+      taxPrice,
+      note
+    } = req.body;
+
+    console.log('🔄 Order Update Request:', {
+      orderId: req.params.id,
+      itemsCount: orderItems?.length,
+      shippingPrice,
+      taxPrice
+    });
+
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    // Update order fields
+    if (shippingAddress) {
+      order.shippingAddress = { ...order.shippingAddress, ...shippingAddress };
+    }
+
+    if (orderItems) {
+      order.orderItems = orderItems;
+    }
+
+    if (shippingPrice !== undefined) {
+      order.shippingPrice = shippingPrice;
+    }
+
+    if (taxPrice !== undefined) {
+      order.taxPrice = taxPrice;
+    }
+
+    // Recalculate total price
+    const itemsTotal = order.orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    order.totalPrice = itemsTotal + order.shippingPrice + order.taxPrice;
+
+    // Add to status history
+    order.statusHistory.push({
+      status: order.orderStatus,
+      note: note || 'Order details updated by admin',
+      updatedBy: req.user.id,
+      updatedAt: new Date()
+    });
+
+    await order.save();
+
+    // Populate for response
+    await order.populate('user', 'name email');
+    await order.populate('statusHistory.updatedBy', 'name');
+
+    console.log('✅ Order updated successfully');
+
+    res.status(200).json({
+      success: true,
+      message: 'Order updated successfully',
+      order
+    });
+
+  } catch (error) {
+    console.error('❌ Order update error:', error);
+    
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid order ID'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Server error: ' + error.message
+    });
+  }
+};
