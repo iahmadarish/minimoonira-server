@@ -14,12 +14,51 @@ export const getCart = async (req, res) => {
     });
   }
   
-  const cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name slug imageGroups');
+  const cart = await Cart.findOne({ user: req.user.id })
+    .populate('items.product', 'name slug imageGroups variants hasVariants');
+  
   if (!cart) {
     const newCart = await Cart.create({ user: req.user.id, items: [] });
     return res.status(200).json({ success: true, cart: newCart });
   }
-  res.status(200).json({ success: true, cart });
+  
+  // কার্ট আইটেম প্রসেসিং
+  const processedCart = {
+    ...cart.toObject(),
+    items: cart.items.map(item => {
+      const product = item.product;
+      if (!product) return item;
+      
+      // ভ্যারিয়েন্ট সিলেক্ট করা থাকলে সেই ইমেজ নিন
+      let productImage = '';
+      if (product.imageGroups && product.imageGroups.length > 0) {
+        if (item.variant && item.variant.name && product.hasVariants) {
+          // ভ্যারিয়েন্টের ইমেজ গ্রুপ খুঁজুন
+          const variantImageGroup = product.imageGroups.find(
+            group => group.name === item.variant.name
+          );
+          if (variantImageGroup && variantImageGroup.images.length > 0) {
+            productImage = variantImageGroup.images[0].url;
+          }
+        }
+        
+        // ভ্যারিয়েন্ট ইমেজ না পেলে মেইন ইমেজ নিন
+        if (!productImage) {
+          const mainGroup = product.imageGroups.find(group => group.name === 'Main') || product.imageGroups[0];
+          productImage = mainGroup.images[0]?.url || '';
+        }
+      }
+      
+      return {
+        ...item.toObject(),
+        name: product.name,
+        image: productImage,
+        productId: product._id
+      };
+    })
+  };
+  
+  res.status(200).json({ success: true, cart: processedCart });
 };
 
 // @desc    Add item to cart
