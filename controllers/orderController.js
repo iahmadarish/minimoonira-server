@@ -680,7 +680,6 @@ export const getOrderByIdAdmin = async (req, res, next) => {
   }
 };
 
-// controllers/orderController.js - এই ফাংশনটি যোগ করুন
 export const updateOrderDetails = async (req, res, next) => {
   try {
     const {
@@ -699,7 +698,7 @@ export const updateOrderDetails = async (req, res, next) => {
       user: req.user.id
     });
 
-    // ✅ Order খুঁজে আনুন (orderNumber বা _id দিয়ে)
+    // ✅ Order খুঁজে আনুন
     let order;
     
     // Check if it's a valid ObjectId
@@ -719,7 +718,7 @@ export const updateOrderDetails = async (req, res, next) => {
 
     console.log('✅ Order found:', order.orderNumber);
 
-    // Update order fields
+    // Update shipping address
     if (shippingAddress) {
       order.shippingAddress = { 
         ...order.shippingAddress, 
@@ -728,6 +727,7 @@ export const updateOrderDetails = async (req, res, next) => {
       console.log('📍 Shipping address updated');
     }
 
+    // Update order items
     if (orderItems && Array.isArray(orderItems)) {
       order.orderItems = orderItems.map(item => ({
         name: item.name,
@@ -741,6 +741,7 @@ export const updateOrderDetails = async (req, res, next) => {
       console.log('📦 Order items updated:', orderItems.length);
     }
 
+    // Update pricing
     if (shippingPrice !== undefined) {
       order.shippingPrice = parseFloat(shippingPrice) || 0;
       console.log('🚚 Shipping price updated:', order.shippingPrice);

@@ -7,7 +7,8 @@ import {
   updatePaymentStatus,
   addAdminNote,
   deleteOrder,
-  getOrderByIdAdmin
+  getOrderByIdAdmin,
+  updateOrderDetails
 } from '../controllers/orderController.js';
 import { protect, admin } from '../middlewares/authMiddleware.js';
 
@@ -21,6 +22,10 @@ router.route('/')
 
 router.route('/stats')
   .get(getOrderStats);
+  router.route('/:id')
+  .get(getOrderByIdAdmin)
+  .put(updateOrderDetails) // ✅ নতুন route যোগ করুন
+  .delete(deleteOrder);
 
 router.route('/:id')
   .get(getOrderByIdAdmin)
