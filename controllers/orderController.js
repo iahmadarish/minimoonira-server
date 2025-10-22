@@ -212,44 +212,64 @@ export const getMyOrders = async (req, res, next) => {
 // @access  Private/Public
 export const getOrderById = async (req, res, next) => {
   try {
-    const order = await Order.findById(req.params.id)
+    console.log('🔍 Fetching order with ID:', req.params.id);
+    
+    // ✅ প্রথমে orderNumber দিয়ে খুঁজুন
+    let order = await Order.findOne({ orderNumber: req.params.id })
       .populate('user', 'name email')
       .populate('statusHistory.updatedBy', 'name');
 
+    // ✅ যদি orderNumber দিয়ে না পাওয়া যায়, তাহলে _id দিয়ে খুঁজুন
     if (!order) {
+      console.log('🔍 Trying to find by _id:', req.params.id);
+      order = await Order.findById(req.params.id)
+        .populate('user', 'name email')
+        .populate('statusHistory.updatedBy', 'name');
+    }
+
+    if (!order) {
+      console.log('❌ Order not found for:', req.params.id);
       return res.status(404).json({ 
         success: false, 
         message: 'Order not found' 
       });
     }
 
-    // Authorization check
-    // 💡 নতুন লজিক: যদি অর্ডারটি গেস্ট অর্ডার হয় OR 
-    // যদি অর্ডারের মালিক রিকোয়েস্ট করা ইউজার হন, তবে দেখতে দিন।
-    
-    // 1. যদি গেস্ট অর্ডার হয়, তবে অনুমতি দিন (যদি আপনি ট্র্যাকিং এর জন্য গেস্টকে উন্মুক্ত রাখতে চান)
+    console.log('✅ Order found:', order.orderNumber);
+
+    // Authorization check - Updated logic
     if (order.isGuest) {
-        // এখানে আপনি আরও কঠোর ভেরিফিকেশন যোগ করতে পারেন (যেমন, ট্রানজ্যাকশন আইডি/ইমেল)
-        // বর্তমানে অর্ডার লোড করার জন্য এক্সেস দিচ্ছি:
-        return res.status(200).json({ success: true, order }); // ✅ Guest Order লোড হবে।
+      // Guest order - allow access (you can add email verification if needed)
+      return res.status(200).json({ success: true, order });
     } 
     
-    // 2. যদি রেজিস্টার্ড ইউজার অর্ডার হয়
-    if (!req.user || !order.user || order.user._id.toString() !== req.user.id) {
-        // যদি ইউজার লগইন করা না থাকে (!req.user) বা অর্ডারের মালিক না হয়
-        return res.status(403).json({
-            success: false,
-            message: 'Not authorized to view this order'
-        });
+    // Registered user order
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required to view this order'
+      });
+    }
+
+    if (order.user && order.user._id.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to view this order'
+      });
     }
     
-    // যদি রেজিস্টার্ড ইউজার হন এবং তিনিই মালিক হন
     res.status(200).json({ success: true, order });
 
   } catch (error) {
+    console.error('❌ Order fetch error:', error);
+    
     if (error.name === 'CastError') {
-      return res.status(404).json({ success: false, message: 'Order not found' });
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Order not found' 
+      });
     }
+    
     next(error);
   }
 };
