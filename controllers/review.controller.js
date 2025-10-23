@@ -408,5 +408,145 @@ const updateProductRating = async (productId) => {
   }
 };
 
+
+/**
+ * @desc Admin adds multiple demo reviews for a product in bulk (Feature 1)
+ * @route POST /api/reviews/admin/bulk
+ * @access Private/Admin
+ */
+export const addBulkDemoReviews = async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: "Validation errors",
+                errors: errors.array()
+            });
+        }
+
+        const { productId, reviews: bulkReviews } = req.body;
+
+        // 1. Check if product exists
+        const product = await Product.findById(productId);
+
+        if (!product) {
+            return res.status(404).json({
+                success: false,
+                message: "Product not found"
+            });
+        }
+
+        // 2. Prepare reviews for bulk insertion
+        // We create unique placeholder user IDs for each review to bypass the unique index on { user: 1, product: 1 }
+        const reviewsToInsert = bulkReviews.map((review) => ({
+            ...review,
+            product: new mongoose.Types.ObjectId(productId),
+            // IMPORTANT: Use a new unique ObjectId for the 'user' field for *each* review.
+            // This simulates different users and respects the unique index.
+            user: new mongoose.Types.ObjectId().toHexString(), 
+            status: "approved", // Demo reviews are automatically approved
+            adminNotes: "Admin-generated demo review for initial social proof."
+        }));
+
+        // 3. Bulk Insert
+        const result = await Review.insertMany(reviewsToInsert, { ordered: false });
+
+        // 4. Update product statistics
+        await updateProductRating(productId); // This function should already exist in your file
+
+        res.status(201).json({
+            success: true,
+            message: `Successfully added ${result.length} bulk demo reviews for product ${productId}`,
+            insertedCount: result.length
+        });
+
+    } catch (error) {
+        console.error("Error adding bulk demo reviews:", error);
+        if (error.code === 11000) {
+            // Handle unique key errors (less likely with unique ObjectId generation, but good practice)
+            return res.status(500).json({
+                success: false,
+                message: "A unique key constraint violation occurred during bulk insert.",
+                error: error.message
+            });
+        }
+        res.status(500).json({
+            success: false,
+            message: "Error adding bulk demo reviews",
+            error: error.message
+        });
+    }
+};
+
+
+/**
+ * @desc Admin gets all reviews and star analysis statistics (Feature 2)
+ * @route GET /api/reviews/admin/all
+ * @access Private/Admin
+ */
+export const getAllReviewsAndStats = async (req, res) => {
+    try {
+        // --- 1. Fetch All Reviews ---
+        const reviews = await Review.find({})
+            .populate("product", "name image") // Populate with product name and image
+            .populate("user", "name email") // Populate with user name and email
+            .sort({ createdAt: -1 }) // Latest reviews first
+            .limit(100); // Limit to a reasonable number for performance
+
+        // --- 2. Star Rating Analysis (Aggregation) ---
+        const starStats = await Review.aggregate([
+            {
+                // We only analyze approved reviews for meaningful statistics
+                $match: {
+                    status: "approved"
+                }
+            },
+            {
+                $group: {
+                    _id: "$rating", // Group by rating (1, 2, 3, 4, 5)
+                    count: { $sum: 1 } // Count how many reviews have this rating
+                }
+            },
+            {
+                $project: {
+                    _id: 0, // Exclude the default _id
+                    rating: "$_id",
+                    count: 1
+                }
+            },
+            {
+                $sort: { rating: -1 } // Sort from 5 stars down to 1 star
+            }
+        ]);
+
+        // 3. Calculate total and percentage for analysis
+        const totalApprovedReviews = starStats.reduce((sum, stat) => sum + stat.count, 0);
+
+        const formattedStarStats = starStats.map(stat => ({
+            rating: stat.rating,
+            count: stat.count,
+            percentage: totalApprovedReviews > 0 ? parseFloat(((stat.count / totalApprovedReviews) * 100).toFixed(2)) : 0
+        }));
+
+        res.status(200).json({
+            success: true,
+            message: "All reviews and star statistics retrieved successfully",
+            reviews,
+            starStats: formattedStarStats,
+            totalApprovedReviews
+        });
+
+    } catch (error) {
+        console.error("Error retrieving all reviews and statistics:", error);
+        res.status(500).json({
+            success: false,
+            message: "Error retrieving all reviews and statistics",
+            error: error.message
+        });
+    }
+};
+
+
 // Export the helper function if needed elsewhere
 export { updateProductRating };
