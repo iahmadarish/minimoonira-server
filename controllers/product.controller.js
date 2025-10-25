@@ -1,11 +1,11 @@
 import Product from "../models/product.model.js";
-import mongoose from "mongoose"; // এই import যোগ করুন
+import mongoose from "mongoose"; 
 import { validationResult } from "express-validator";
 
 // Create a new product
 export const createProduct = async (req, res) => {
   try {
-    console.log('Received product data:', req.body); // ডিবাগিং এর জন্য
+    console.log('Received product data:', req.body); 
 
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -52,20 +52,49 @@ export const createProduct = async (req, res) => {
       };
     }
     
-    // Parse variants with proper data types
+    // ভেরিয়েন্ট এবং ভেরিয়েন্ট অপশন হ্যান্ডলিং
     if (req.body.variants && Array.isArray(req.body.variants) && req.body.variants.length > 0) {
       productData.hasVariants = true;
-      productData.variants = req.body.variants.map(variant => ({
-        name: variant.name,
-        value: variant.value,
-        basePrice: parseFloat(variant.basePrice) || parseFloat(req.body.basePrice) || 0,
-        discountPercentage: parseFloat(variant.discountPercentage) || 0,
-        discountStart: variant.discountStart || null,
-        discountEnd: variant.discountEnd || null,
-        stock: parseInt(variant.stock) || 0,
-        imageGroupName: variant.imageGroupName || '',
-        sku: variant.sku || ''
-      }));
+      
+      // variantOptions সেভ করা
+      if (req.body.variantOptions && Array.isArray(req.body.variantOptions)) {
+          productData.variantOptions = req.body.variantOptions;
+      }
+      
+      productData.variants = req.body.variants.map(variant => {
+        // ভেরিয়েন্টের জন্য ডিসকাউন্ট ডেট হ্যান্ডলিং
+        let variantDiscountStart = null;
+        let variantDiscountEnd = null;
+        
+        if (variant.discountStart) {
+          const startDate = new Date(variant.discountStart);
+          variantDiscountStart = isNaN(startDate.getTime()) ? null : startDate;
+        }
+        
+        if (variant.discountEnd) {
+          const endDate = new Date(variant.discountEnd);
+          variantDiscountEnd = isNaN(endDate.getTime()) ? null : endDate;
+        }
+
+        return ({
+          // options অ্যারে হ্যান্ডলিং
+          options: Array.isArray(variant.options) ? variant.options.map(opt => ({
+            name: opt.name,
+            value: opt.value,
+          })) : [],
+          
+          basePrice: parseFloat(variant.basePrice) || parseFloat(req.body.basePrice) || 0,
+          discountPercentage: parseFloat(variant.discountPercentage) || 0,
+          discountStart: variantDiscountStart,
+          discountEnd: variantDiscountEnd,
+          stock: parseInt(variant.stock) || 0,
+          imageGroupName: variant.imageGroupName || '',
+          sku: variant.sku || ''
+        });
+      });
+    } else {
+        productData.hasVariants = false;
+        productData.variantOptions = []; 
     }
 
     // Handle image groups
@@ -75,7 +104,7 @@ export const createProduct = async (req, res) => {
         images: group.images || []
       }));
     } else {
-      // Default image group যদি না থাকে
+      // Default image group
       productData.imageGroups = [{
         name: 'Main',
         images: []
@@ -97,46 +126,22 @@ export const createProduct = async (req, res) => {
       productData.metaKeywords = req.body.metaKeywords;
     }
 
-    // Handle discount dates
+    // Handle main product discount dates
     if (req.body.discountStart) {
-  const startDate = new Date(req.body.discountStart);
-  productData.discountStart = isNaN(startDate.getTime()) ? null : startDate;
-} else {
-  productData.discountStart = null;
-}
+      const startDate = new Date(req.body.discountStart);
+      productData.discountStart = isNaN(startDate.getTime()) ? null : startDate;
+    } else {
+      productData.discountStart = null;
+    }
 
-if (req.body.discountEnd) {
-  const endDate = new Date(req.body.discountEnd);
-  productData.discountEnd = isNaN(endDate.getTime()) ? null : endDate;
-} else {
-  productData.discountEnd = null;
-}
-
-// Handle variant discount dates
-if (req.body.variants && Array.isArray(req.body.variants) && req.body.variants.length > 0) {
-  productData.variants = req.body.variants.map(variant => {
-    let variantDiscountStart = null;
-    let variantDiscountEnd = null;
-    
-    if (variant.discountStart) {
-      const startDate = new Date(variant.discountStart);
-      variantDiscountStart = isNaN(startDate.getTime()) ? null : startDate;
+    if (req.body.discountEnd) {
+      const endDate = new Date(req.body.discountEnd);
+      productData.discountEnd = isNaN(endDate.getTime()) ? null : endDate;
+    } else {
+      productData.discountEnd = null;
     }
     
-    if (variant.discountEnd) {
-      const endDate = new Date(variant.discountEnd);
-      variantDiscountEnd = isNaN(endDate.getTime()) ? null : endDate;
-    }
-    
-    return {
-      ...variant,
-      discountStart: variantDiscountStart,
-      discountEnd: variantDiscountEnd
-    };
-  });
-}
-    
-    console.log('Processed product data:', productData); // ডিবাগিং এর জন্য
+    console.log('Processed product data:', productData); 
     
     // Create product
     const product = new Product(productData);
@@ -206,15 +211,12 @@ export const getProducts = async (req, res) => {
     if (search) {
       const searchRegex = new RegExp(search, 'i');
       
-      // ✅ শুধুমাত্র $regex ব্যবহার করে নিরাপদ Partial Match Search
       filter.$or = [
         { name: { $regex: searchRegex } },
         { brand: { $regex: searchRegex } },
         { slug: { $regex: searchRegex } },
       ];
     }
-    
-    // If other filters exist, MongoDB will AND them with the $or block above.
     
     if (category) {
       filter.category = category;
@@ -227,7 +229,6 @@ export const getProducts = async (req, res) => {
     }
     
     if (brand && !search) {
-      // brand filter শুধুমাত্র তখনই যোগ করা হবে, যখন এটি search query-এর অংশ নয়
       filter.brand = new RegExp(brand, "i");
     }
     
@@ -245,7 +246,6 @@ export const getProducts = async (req, res) => {
 
     // Execute query with pagination
      const products = await Product.find(filter)
-      // ... (populate options remains the same) ...
       .populate({
         path: "category",
         populate: {
@@ -372,7 +372,55 @@ export const updateProduct = async (req, res) => {
         height: parseFloat(req.body.dimensions.height) || 0
       };
     }
+    
+    // ভেরিয়েন্ট এবং ভেরিয়েন্ট অপশন হ্যান্ডলিং
+    if (req.body.variants && Array.isArray(req.body.variants) && req.body.variants.length > 0) {
+      productData.hasVariants = true;
+      
+      if (req.body.variantOptions && Array.isArray(req.body.variantOptions)) {
+          productData.variantOptions = req.body.variantOptions;
+      } else {
+          productData.variantOptions = [];
+      }
 
+      productData.variants = req.body.variants.map(variant => {
+        let variantDiscountStart = null;
+        let variantDiscountEnd = null;
+        
+        if (variant.discountStart) {
+          const startDate = new Date(variant.discountStart);
+          variantDiscountStart = isNaN(startDate.getTime()) ? null : startDate;
+        }
+        
+        if (variant.discountEnd) {
+          const endDate = new Date(variant.discountEnd);
+          variantDiscountEnd = isNaN(endDate.getTime()) ? null : endDate;
+        }
+
+        return ({
+          // options অ্যারে হ্যান্ডলিং
+          options: Array.isArray(variant.options) ? variant.options.map(opt => ({
+            name: opt.name,
+            value: opt.value,
+          })) : [],
+          
+          basePrice: parseFloat(variant.basePrice) || parseFloat(req.body.basePrice) || 0,
+          discountPercentage: parseFloat(variant.discountPercentage) || 0,
+          discountStart: variantDiscountStart,
+          discountEnd: variantDiscountEnd,
+          stock: parseInt(variant.stock) || 0,
+          imageGroupName: variant.imageGroupName || '',
+          sku: variant.sku || ''
+        });
+      });
+    } else {
+        // যদি variants না থাকে
+        productData.hasVariants = false;
+        productData.variants = [];
+        productData.variantOptions = [];
+    }
+
+    // মেইন প্রোডাক্ট ডিসকাউন্ট ডেট হ্যান্ডলিং
     if (req.body.discountStart) {
       productData.discountStart = new Date(req.body.discountStart);
     }
@@ -456,7 +504,7 @@ export const deleteProduct = async (req, res) => {
 export const addReview = async (req, res) => {
   try {
     const { rating, comment } = req.body;
-    const userId = req.user._id; // Assuming you have user authentication
+    const userId = req.user._id; 
 
     const product = await Product.findById(req.params.id);
     

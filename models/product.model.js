@@ -9,10 +9,31 @@ const imageSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// ✅ পরিবর্তিত: ভেরিয়েন্টের ডাইমেনশন (যেমন Color, Size) সংজ্ঞায়িত করার জন্য স্কিমা
+const optionSchema = new mongoose.Schema(
+  {
+    name: { 
+      type: String, 
+      required: true, 
+      trim: true, 
+      // enum: ['Color', 'Size', 'Material', 'Style', 'Bundle'], // ব্যবহারকারীর অনুরোধে এই enum সরানো হয়েছে।
+      default: 'Color' 
+    },
+    values: [{ type: String, trim: true, required: true }],
+  },
+  { _id: false }
+);
+
+// পরিবর্তিত: প্রতিটি কম্বিনেশনের (যেমন Black-S) জন্য ভেরিয়েন্ট স্কিমা
 const variantSchema = new mongoose.Schema(
   {
-    name: { type: String, trim: true, required: true },
-    value: { type: String, trim: true, required: true },
+    options: [ 
+      {
+        name: { type: String, trim: true, required: true }, // e.g., "Color" (এখন যেকোনো স্ট্রিং হতে পারে)
+        value: { type: String, trim: true, required: true }, // e.g., "Red"
+        _id: false
+      }
+    ],
     basePrice: { type: Number, min: 0 },
     discountPercentage: { type: Number, min: 0, max: 100, default: 0 },
     discountStart: { type: Date },
@@ -20,7 +41,7 @@ const variantSchema = new mongoose.Schema(
     price: { type: Number, min: 0 },
     stock: { type: Number, min: 0, default: 0 },
     imageGroupName: { type: String, trim: true },
-    sku: { type: String, sparse: true }, // Remove unique constraint for variants
+    sku: { type: String, sparse: true }, 
   },
   { _id: false }
 );
@@ -38,7 +59,6 @@ const productSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       index: true,
-      // Remove required: true, let pre-save hook handle it
     },
     description: { type: String, trim: true },
     brand: { type: String, trim: true, default: "Generic" },
@@ -80,8 +100,9 @@ const productSchema = new mongoose.Schema(
         value: { type: String, required: true, trim: true },
       },
     ],
+    variantOptions: [optionSchema], 
     hasVariants: { type: Boolean, default: false },
-    variants: [variantSchema],
+    variants: [variantSchema], 
     averageRating: { type: Number, default: 0, min: 0, max: 5 },
     numReviews: { type: Number, default: 0, min: 0 },
     reviews: [
@@ -110,7 +131,6 @@ const productSchema = new mongoose.Schema(
   },
   { 
     timestamps: true,
-    // Add this to avoid issues with subdocument _id
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
   }
@@ -119,16 +139,14 @@ const productSchema = new mongoose.Schema(
 // Generate slug from name
 productSchema.pre("save", function (next) {
   if (this.isModified("name") && this.name) {
-    // Make slug generation more robust
     this.slug = this.name
       .toLowerCase()
       .trim()
-      .replace(/[^a-zA-Z0-9\s-]/g, "") // Remove special characters except spaces and hyphens
-      .replace(/\s+/g, "-") // Replace spaces with hyphens
-      .replace(/-+/g, "-") // Replace multiple hyphens with single hyphen
-      .replace(/^-|-$/g, ""); // Remove leading/trailing hyphens
+      .replace(/[^a-zA-Z0-9\s-]/g, "") 
+      .replace(/\s+/g, "-") 
+      .replace(/-+/g, "-") 
+      .replace(/^-|-$/g, ""); 
     
-    // Ensure slug is not empty
     if (!this.slug) {
       this.slug = "product-" + Date.now();
     }
@@ -137,14 +155,11 @@ productSchema.pre("save", function (next) {
 });
 
 // Pricing Calculation Middleware
-// In product.model.js, replace the calculatePrice function and pre-save hook:
-
 function calculatePrice(basePrice, discountPercentage, discountStart, discountEnd) {
   const now = new Date();
   const startDate = discountStart ? new Date(discountStart) : null;
   const endDate = discountEnd ? new Date(discountEnd) : null;
   
-  // Check if discount is currently active
   const isDiscountActive = discountPercentage > 0 && 
                           startDate && 
                           endDate &&
@@ -159,7 +174,6 @@ function calculatePrice(basePrice, discountPercentage, discountStart, discountEn
 
 // Pre-save hook
 productSchema.pre("save", function (next) {
-  // Calculate main product price
   this.price = calculatePrice(
     this.basePrice,
     this.discountPercentage,
@@ -167,7 +181,6 @@ productSchema.pre("save", function (next) {
     this.discountEnd
   );
 
-  // Calculate variant prices
   if (this.hasVariants && this.variants && this.variants.length > 0) {
     this.variants = this.variants.map((variant) => {
       const variantBasePrice = variant.basePrice || this.basePrice;
