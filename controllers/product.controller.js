@@ -52,20 +52,42 @@ export const createProduct = async (req, res) => {
       };
     }
     
-    // Parse variants with proper data types
+    // ======= প্রধান পরিবর্তন: Variants Parsing লজিক =======
     if (req.body.variants && Array.isArray(req.body.variants) && req.body.variants.length > 0) {
       productData.hasVariants = true;
-      productData.variants = req.body.variants.map(variant => ({
-        name: variant.name,
-        value: variant.value,
-        basePrice: parseFloat(variant.basePrice) || parseFloat(req.body.basePrice) || 0,
-        discountPercentage: parseFloat(variant.discountPercentage) || 0,
-        discountStart: variant.discountStart || null,
-        discountEnd: variant.discountEnd || null,
-        stock: parseInt(variant.stock) || 0,
-        imageGroupName: variant.imageGroupName || '',
-        sku: variant.sku || ''
-      }));
+      
+      productData.variants = req.body.variants.map(variant => {
+        // Variant Discount Date Parsing
+        let variantDiscountStart = null;
+        let variantDiscountEnd = null;
+        
+        if (variant.discountStart) {
+          const startDate = new Date(variant.discountStart);
+          variantDiscountStart = isNaN(startDate.getTime()) ? null : startDate;
+        }
+        
+        if (variant.discountEnd) {
+          const endDate = new Date(variant.discountEnd);
+          variantDiscountEnd = isNaN(endDate.getTime()) ? null : endDate;
+        }
+        
+        return {
+          // *** UPDATED: 'name' এবং 'value' এর পরিবর্তে 'attributes' ***
+          attributes: variant.attributes || [], // এই অ্যাট্রিবিউট অ্যারেতে Color, Size সব থাকবে
+          
+          basePrice: parseFloat(variant.basePrice) || parseFloat(req.body.basePrice) || 0,
+          discountPercentage: parseFloat(variant.discountPercentage) || 0,
+          stock: parseInt(variant.stock) || 0,
+          imageGroupName: variant.imageGroupName || '',
+          sku: variant.sku || '',
+          
+          discountStart: variantDiscountStart, 
+          discountEnd: variantDiscountEnd, 
+        };
+      });
+    } else {
+      productData.hasVariants = false;
+      productData.variants = [];
     }
 
     // Handle image groups
@@ -97,44 +119,23 @@ export const createProduct = async (req, res) => {
       productData.metaKeywords = req.body.metaKeywords;
     }
 
-    // Handle discount dates
+    // Handle discount dates (Main Product)
     if (req.body.discountStart) {
-  const startDate = new Date(req.body.discountStart);
-  productData.discountStart = isNaN(startDate.getTime()) ? null : startDate;
-} else {
-  productData.discountStart = null;
-}
+      const startDate = new Date(req.body.discountStart);
+      productData.discountStart = isNaN(startDate.getTime()) ? null : startDate;
+    } else {
+      productData.discountStart = null;
+    }
 
-if (req.body.discountEnd) {
-  const endDate = new Date(req.body.discountEnd);
-  productData.discountEnd = isNaN(endDate.getTime()) ? null : endDate;
-} else {
-  productData.discountEnd = null;
-}
-
-// Handle variant discount dates
-if (req.body.variants && Array.isArray(req.body.variants) && req.body.variants.length > 0) {
-  productData.variants = req.body.variants.map(variant => {
-    let variantDiscountStart = null;
-    let variantDiscountEnd = null;
-    
-    if (variant.discountStart) {
-      const startDate = new Date(variant.discountStart);
-      variantDiscountStart = isNaN(startDate.getTime()) ? null : startDate;
+    if (req.body.discountEnd) {
+      const endDate = new Date(req.body.discountEnd);
+      productData.discountEnd = isNaN(endDate.getTime()) ? null : endDate;
+    } else {
+      productData.discountEnd = null;
     }
     
-    if (variant.discountEnd) {
-      const endDate = new Date(variant.discountEnd);
-      variantDiscountEnd = isNaN(endDate.getTime()) ? null : endDate;
-    }
-    
-    return {
-      ...variant,
-      discountStart: variantDiscountStart,
-      discountEnd: variantDiscountEnd
-    };
-  });
-}
+    // Note: Variant discount date parsing is now merged into the main variant mapping block, 
+    // so the previous separate block for variants is removed.
     
     console.log('Processed product data:', productData); // ডিবাগিং এর জন্য
     
@@ -182,6 +183,9 @@ if (req.body.variants && Array.isArray(req.body.variants) && req.body.variants.l
     });
   }
 };
+// ... বাকি ফাংশনগুলি (getProducts, getProductById, updateProduct ইত্যাদি) অপরিবর্তিত থাকবে।
+// আপনি যদি 'updateProduct' ফাংশনের মাধ্যমে ভ্যারিয়েন্ট আপডেট করতে চান, 
+// তাহলে সেখানেও 'createProduct'-এর মতো একই ভ্যারিয়েন্ট পার্সিং লজিক যোগ করতে হবে।
 
 // Get all products with filtering and pagination
 export const getProducts = async (req, res) => {

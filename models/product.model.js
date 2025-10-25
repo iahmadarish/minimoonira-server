@@ -11,16 +11,23 @@ const imageSchema = new mongoose.Schema(
 
 const variantSchema = new mongoose.Schema(
   {
-    name: { type: String, trim: true, required: true },
-    value: { type: String, trim: true, required: true },
-    basePrice: { type: Number, min: 0 },
-    discountPercentage: { type: Number, min: 0, max: 100, default: 0 },
-    discountStart: { type: Date },
-    discountEnd: { type: Date },
-    price: { type: Number, min: 0 },
+    // === NEW ATTRIBUTE STRUCTURE ===
+    attributes: [
+      {
+        key: { type: String, required: true, trim: true }, // e.g., "Color", "Size"
+        value: { type: String, required: true, trim: true }, // e.g., "Red", "S"
+      },
+    ],
+    // ===============================
+    
+    basePrice: { type: Number, min: 0 }, // Optional: Overrides product basePrice
+    discountPercentage: { type: Number, min: 0, max: 100, default: 0 }, // Optional: Overrides product discount
+    discountStart: { type: Date }, // Optional: Overrides product discountStart
+    discountEnd: { type: Date }, // Optional: Overrides product discountEnd
+    price: { type: Number, min: 0 }, // Calculated price
     stock: { type: Number, min: 0, default: 0 },
     imageGroupName: { type: String, trim: true },
-    sku: { type: String, sparse: true }, // Remove unique constraint for variants
+    sku: { type: String, unique: true, sparse: true }, // Unique for each combination
   },
   { _id: false }
 );
