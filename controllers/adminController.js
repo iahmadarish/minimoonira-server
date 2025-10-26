@@ -2,13 +2,13 @@ import Order from '../models/order.model.js';
 import User from '../models/user.model.js';
 import Product from '../models/product.model.js';
 import Category from '../models/Category.js';
-import { asyncHandler } from '../utils/asyncHandler.js'; // Assuming you have this utility
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 // @desc    Get all dashboard analytics
 // @route   GET /api/v1/admin/analytics
 // @access  Private/Admin
 export const getAdminAnalytics = asyncHandler(async (req, res) => {
-    // 1. Order Stats (Similar to what you already fetch)
+    // 1. Order Stats
     const orderStats = await Order.aggregate([
         { 
             $group: {
@@ -25,36 +25,49 @@ export const getAdminAnalytics = asyncHandler(async (req, res) => {
     
     // 2. User Stats
     const userStats = await User.aggregate([
-        { $group: { _id: null, totalUsers: { $sum: 1 } } },
+        { 
+            $group: { 
+                _id: null, 
+                totalUsers: { $sum: 1 },
+                adminUsers: { $sum: { $cond: [{ $eq: ["$role", "admin"] }, 1, 0] } },
+                executiveUsers: { $sum: { $cond: [{ $eq: ["$role", "executive"] }, 1, 0] } },
+                regularUsers: { $sum: { $cond: [{ $eq: ["$role", "user"] }, 1, 0] } }
+            } 
+        },
         { $project: { _id: 0 } }
     ]);
     stats.totalUsers = userStats[0]?.totalUsers || 0;
+    stats.adminUsers = userStats[0]?.adminUsers || 0;
+    stats.executiveUsers = userStats[0]?.executiveUsers || 0;
+    stats.regularUsers = userStats[0]?.regularUsers || 0;
 
     // 3. Product Stats
     const productStats = await Product.aggregate([
-        { $group: { _id: null, totalProducts: { $sum: 1 } } },
+        { 
+            $group: { 
+                _id: null, 
+                totalProducts: { $sum: 1 },
+                outOfStock: { $sum: { $cond: [{ $eq: ["$stock", 0] }, 1, 0] } }
+            } 
+        },
         { $project: { _id: 0 } }
     ]);
     stats.totalProducts = productStats[0]?.totalProducts || 0;
+    stats.outOfStockProducts = productStats[0]?.outOfStock || 0;
 
-    // 4. Category Sales Analysis (Top 3 categories by total sales quantity)
+    // 4. Category Sales Analysis
     const categorySales = await Order.aggregate([
-        // Filter only delivered orders for accurate sales data
-        { $match: { orderStatus: "Delivered" } }, 
-        // Deconstruct orderItems
+        { $match: { orderStatus: "Delivered" } },
         { $unwind: "$orderItems" },
-        // Look up product to get category
         {
             $lookup: {
-                from: "products", // The name of your product collection
+                from: "products",
                 localField: "orderItems.product",
                 foreignField: "_id",
                 as: "productInfo"
             }
         },
-        // Unwind the productInfo
         { $unwind: "$productInfo" },
-        // Group by category and sum quantity
         {
             $group: {
                 _id: "$productInfo.category",
@@ -62,16 +75,14 @@ export const getAdminAnalytics = asyncHandler(async (req, res) => {
                 totalSalesValue: { $sum: { $multiply: ["$orderItems.quantity", "$orderItems.price"] } }
             }
         },
-        // Look up category name
         {
             $lookup: {
-                from: "categories", // The name of your category collection
+                from: "categories",
                 localField: "_id",
                 foreignField: "_id",
                 as: "categoryDetails"
             }
         },
-        // Final project/sort
         { $unwind: "$categoryDetails" },
         { $sort: { totalQuantitySold: -1 } },
         { $limit: 3 },
@@ -86,8 +97,262 @@ export const getAdminAnalytics = asyncHandler(async (req, res) => {
     ]);
     stats.topCategories = categorySales;
 
+    // 5. Recent Orders (last 5 orders)
+    const recentOrders = await Order.find()
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .populate('user', 'name email')
+        .select('orderNumber totalPrice orderStatus createdAt');
+
+    stats.recentOrders = recentOrders;
+
+    // 6. Monthly Revenue (last 6 months)
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const monthlyRevenue = await Order.aggregate([
+        {
+            $match: {
+                orderStatus: "Delivered",
+                createdAt: { $gte: sixMonthsAgo }
+            }
+        },
+        {
+            $group: {
+                _id: {
+                    year: { $year: "$createdAt" },
+                    month: { $month: "$createdAt" }
+                },
+                revenue: { $sum: "$totalPrice" },
+                orderCount: { $sum: 1 }
+            }
+        },
+        {
+            $sort: { "_id.year": 1, "_id.month": 1 }
+        },
+        {
+            $project: {
+                _id: 0,
+                month: { $concat: [ 
+                    { $toString: "$_id.year" }, 
+                    "-", 
+                    { $toString: "$_id.month" } 
+                ]},
+                revenue: 1,
+                orderCount: 1
+            }
+        }
+    ]);
+
+    stats.monthlyRevenue = monthlyRevenue;
+
     res.status(200).json({
         success: true,
         stats
     });
 });
+
+// @desc    Get all users
+// @route   GET /api/v1/admin/users
+// @access  Private/Admin
+export const getUsers = async (req, res) => {
+  try {
+    const users = await User.find().select('-password');
+    
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      users,
+    });
+  } catch (error) {
+    console.error('❌ Get users error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching users',
+    });
+  }
+};
+
+
+// @desc    Create new user (admin only - no authentication required)
+// @route   POST /api/v1/admin/users
+// @access  Private/Admin
+export const createUser = async (req, res) => {
+  try {
+    const { name, email, phoneNumber, password, role } = req.body;
+
+    // Check if user exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'User already exists with this email',
+      });
+    }
+
+    // Create user (auto-verified for admin created users)
+    const user = await User.create({
+      name,
+      email,
+      phoneNumber,
+      password,
+      role: role || 'user',
+      isEmailVerified: true,
+    });
+
+    // Remove password from output
+    const userResponse = user.toObject();
+    delete userResponse.password;
+
+    res.status(201).json({
+      success: true,
+      message: 'User created successfully',
+      user: userResponse,
+    });
+
+  } catch (error) {
+    console.error('❌ Create user error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(val => val.message);
+      return res.status(400).json({
+        success: false,
+        message: messages.join(', '),
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Server error during user creation',
+    });
+  }
+};
+
+// @desc    Update user role
+// @route   PUT /api/v1/admin/users/:id/role
+// @access  Private/Admin
+export const updateUserRole = async (req, res) => {
+  try {
+    const { role } = req.body;
+    
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { role },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'User role updated successfully',
+      user,
+    });
+  } catch (error) {
+    console.error('❌ Update user role error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during role update',
+    });
+  }
+};
+// @desc    Delete user
+// @route   DELETE /api/v1/admin/users/:id
+// @access  Private/Admin
+export const deleteUser = async (req, res) => {
+  try {
+    const user = await User.findByIdAndDelete(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'User deleted successfully',
+    });
+  } catch (error) {
+    console.error('❌ Delete user error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during user deletion',
+    });
+  }
+};
+
+// @desc    Get single user
+// @route   GET /api/v1/admin/users/:id
+// @access  Private/Admin
+export const getUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('-password');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    console.error('❌ Get user error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching user',
+    });
+  }
+};
+
+// @desc    Update user status
+// @route   PUT /api/v1/admin/users/:id/status
+// @access  Private/Admin
+export const updateUserStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    
+    const validStatuses = ['active', 'suspended', 'inactive'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status value',
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'User status updated successfully',
+      user,
+    });
+  } catch (error) {
+    console.error('❌ Update user status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during status update',
+    });
+  }
+};

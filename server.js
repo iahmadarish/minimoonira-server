@@ -15,7 +15,7 @@ import uploadRoutes from './routes/uploadRoutes.js';
 import authRoutes from "./routes/authRoutes.js"
 import cartRoutes from "./routes/cartRoutes.js"
 import orderRoutes from "./routes/orderRoutes.js"
-
+import adminRoutes from './routes/adminRoutes.js';
 import paymentRoutes from "./routes/paymentRoutes.js"
 
 import checkoutRoutes from "./routes/checkoutRoutes.js"
@@ -95,6 +95,8 @@ app.use(`/api/${API_VERSION}/checkout`, checkoutRoutes);
 app.use('/api/v1/admin/orders', adminOrderRoutes);
 app.use('/api/v1/admin/analytics', analyticsRoutes);
 app.use("/api/v1/reviews", reviewRoutes);
+app.use('/api/v1/admin', adminRoutes);
+
 // app.use('/api/v1/admin', adminRoutes);
 // ===== Health Check =====
 app.get("/health", (req, res) => {
