@@ -7,6 +7,7 @@ import mongoose from "mongoose";
 import morgan from "morgan";
 import cookieParser from 'cookie-parser';
 import { errorHandler, notFound } from "./middlewares/errorMiddleware.js";
+import heroContentRoutes from "./routes/heroContentRoutes.js";
 
 // Routes
 import categoryRoutes from "./routes/categoryRoutes.js";
@@ -22,6 +23,7 @@ import checkoutRoutes from "./routes/checkoutRoutes.js"
 import adminOrderRoutes from './routes/adminOrderRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import reviewRoutes from "./routes/review.routes.js";
+import heroRoutes from "./routes/heroRoutes.js";
 
 // import adminRoutes from './routes/adminRoutes.js';
 
@@ -96,6 +98,10 @@ app.use('/api/v1/admin/orders', adminOrderRoutes);
 app.use('/api/v1/admin/analytics', analyticsRoutes);
 app.use("/api/v1/reviews", reviewRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use(`/api/${API_VERSION}/hero`, heroContentRoutes);
+app.use(`/api/${API_VERSION}/hero`, heroRoutes);
+
+// web store CMS - Hero Content 
 
 // app.use('/api/v1/admin', adminRoutes);
 // ===== Health Check =====
