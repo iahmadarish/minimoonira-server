@@ -189,100 +189,202 @@ export const createProduct = async (req, res) => {
 };
 
 // Get all products with filtering and pagination
-export const getProducts = async (req, res) => {
-  try {
-    const {
-      page = 1,
-      limit = 10,
-      search,
-      category,
-      minPrice,
-      maxPrice,
-      brand,
-      isFeatured,
-      isActive,
-      sortBy = "createdAt",
-      sortOrder = "desc"
-    } = req.query;
+// export const getProducts = async (req, res) => {
+//   try {
+//     const {
+//       page = 1,
+//       limit = 10,
+//       search,
+//       category,
+//       minPrice,
+//       maxPrice,
+//       brand,
+//       isFeatured,
+//       isActive,
+//       sortBy = "createdAt",
+//       sortOrder = "desc"
+//     } = req.query;
 
-    // Build filter object
-    let filter = {};
-    
-    if (search) {
-      const searchRegex = new RegExp(search, 'i');
+//     // Build filter object
+//     let filter = {};
+//     
+//     if (search) {
+//       const searchRegex = new RegExp(search, 'i');
       
-      filter.$or = [
-        { name: { $regex: searchRegex } },
-        { brand: { $regex: searchRegex } },
-        { slug: { $regex: searchRegex } },
-      ];
-    }
-    
-    if (category) {
-      filter.category = category;
-    }
-    
-    if (minPrice || maxPrice) {
-      filter.price = {};
-      if (minPrice) filter.price.$gte = Number(minPrice);
-      if (maxPrice) filter.price.$lte = Number(maxPrice);
-    }
-    
-    if (brand && !search) {
-      filter.brand = new RegExp(brand, "i");
-    }
-    
-    if (isFeatured !== undefined) {
-      filter.isFeatured = isFeatured === "true";
-    }
-    
-    if (isActive !== undefined) {
-      filter.isActive = isActive === "true";
-    }
+//       filter.$or = [
+//         { name: { $regex: searchRegex } },
+//         { brand: { $regex: searchRegex } },
+//         { slug: { $regex: searchRegex } },
+//       ];
+//     }
+//     
+//     if (category) {
+//       filter.category = category;
+//     }
+//     
+//     if (minPrice || maxPrice) {
+//       filter.price = {};
+//       if (minPrice) filter.price.$gte = Number(minPrice);
+//       if (maxPrice) filter.price.$lte = Number(maxPrice);
+//     }
+//     
+//     if (brand && !search) {
+//       filter.brand = new RegExp(brand, "i");
+//     }
+//     
+//     if (isFeatured !== undefined) {
+//       filter.isFeatured = isFeatured === "true";
+//     }
+//     
+//     if (isActive !== undefined) {
+//       filter.isActive = isActive === "true";
+//     }
 
-    // Sort options
-    const sortOptions = {};
-    sortOptions[sortBy] = sortOrder === "desc" ? -1 : 1;
+//     // Sort options
+//     const sortOptions = {};
+//     sortOptions[sortBy] = sortOrder === "desc" ? -1 : 1;
 
-    // Execute query with pagination
-     const products = await Product.find(filter)
-      .populate({
-        path: "category",
-        populate: {
-          path: "parentCategory",
-          populate: { path: "parentCategory" }
-        }
-      })
-      .populate({
-        path: "subCategory", 
-        populate: {
-          path: "parentCategory",
-          populate: { path: "parentCategory" }
-        }
-      })
-      .sort(sortOptions)
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
+//     // Execute query with pagination
+//      const products = await Product.find(filter)
+//       .populate({
+//         path: "category",
+//         populate: {
+//           path: "parentCategory",
+//           populate: { path: "parentCategory" }
+//         }
+//       })
+//       .populate({
+//         path: "subCategory", 
+//         populate: {
+//           path: "parentCategory",
+//           populate: { path: "parentCategory" }
+//         }
+//       })
+//       .sort(sortOptions)
+//       .limit(limit * 1)
+//       .skip((page - 1) * limit);
 
-    // Get total count for pagination
-    const total = await Product.countDocuments(filter);
+//     // Get total count for pagination
+//     const total = await Product.countDocuments(filter);
 
-    res.status(200).json({
-      success: true,
-      products,
-      totalPages: Math.ceil(total / limit),
-      currentPage: Number(page),
-      total
-    });
-  } catch (error) {
-    console.error('Error fetching products:', error);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching products",
-      error: error.message
-    });
-  }
+//     res.status(200).json({
+//       success: true,
+//       products,
+//       totalPages: Math.ceil(total / limit),
+//       currentPage: Number(page),
+//       total
+//     });
+//   } catch (error) {
+//     console.error('Error fetching products:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Error fetching products",
+//       error: error.message
+//     });
+//   }
+// };
+
+
+export const getProducts = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      category,
+      minPrice,
+      maxPrice,
+      brand,
+      isFeatured,
+      isActive,
+      sortBy = "createdAt",
+      sortOrder = "desc"
+    } = req.query;
+
+    const userRole = req.user?.role; // ধরে নিচ্ছি req.user সেট করা আছে middleware দিয়ে
+
+    // Build filter object
+    let filter = {};
+
+    if (search) {
+      const searchRegex = new RegExp(search, 'i');
+      filter.$or = [
+        { name: { $regex: searchRegex } },
+        { brand: { $regex: searchRegex } },
+        { slug: { $regex: searchRegex } },
+      ];
+    }
+
+    if (category) {
+      filter.category = category;
+    }
+
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) filter.price.$gte = Number(minPrice);
+      if (maxPrice) filter.price.$lte = Number(maxPrice);
+    }
+
+    if (brand && !search) {
+      filter.brand = new RegExp(brand, "i");
+    }
+
+    if (isFeatured !== undefined) {
+      filter.isFeatured = isFeatured === "true";
+    }
+
+    // 👇 Only admin can see inactive products
+    if (userRole !== "admin") {
+      // non-admin user can only see active products
+      filter.isActive = true;
+    } else if (isActive !== undefined) {
+      // admin can filter by isActive if they want
+      filter.isActive = isActive === "true";
+    }
+
+    // Sort options
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === "desc" ? -1 : 1;
+
+    // Execute query with pagination
+    const products = await Product.find(filter)
+      .populate({
+        path: "category",
+        populate: {
+          path: "parentCategory",
+          populate: { path: "parentCategory" }
+        }
+      })
+      .populate({
+        path: "subCategory",
+        populate: {
+          path: "parentCategory",
+          populate: { path: "parentCategory" }
+        }
+      })
+      .sort(sortOptions)
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await Product.countDocuments(filter);
+
+    res.status(200).json({
+      success: true,
+      products,
+      totalPages: Math.ceil(total / limit),
+      currentPage: Number(page),
+      total
+    });
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching products",
+      error: error.message
+    });
+  }
 };
+
 
 // Get a single product by ID
 export const getProductById = async (req, res) => {
