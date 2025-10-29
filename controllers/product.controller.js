@@ -41,6 +41,8 @@ export const createProduct = async (req, res) => {
       stock: parseInt(req.body.stock) || 0,
       lowStockAlert: parseInt(req.body.lowStockAlert) || 5,
       weight: parseFloat(req.body.weight) || 0,
+      aplusContent: req.body.aplusContent || '',
+      bulletPoints: Array.isArray(req.body.bulletPoints) ? req.body.bulletPoints : [],
     };
     
     // Parse dimensions
@@ -287,6 +289,11 @@ export const createProduct = async (req, res) => {
 
 export const getProducts = async (req, res) => {
   try {
+    console.log('=== DEBUGGING PRODUCTS API ===');
+    console.log('req.user:', req.user);
+    console.log('req.user role:', req.user?.role);
+    console.log('req.headers:', req.headers);
+    
     const {
       page = 1,
       limit = 10,
@@ -301,7 +308,11 @@ export const getProducts = async (req, res) => {
       sortOrder = "desc"
     } = req.query;
 
-    const userRole = req.user?.role; // ধরে নিচ্ছি req.user সেট করা আছে middleware দিয়ে
+    console.log('Query parameters:', req.query);
+    console.log('isActive parameter:', isActive);
+    
+    const userRole = req.user?.role;
+    console.log('Detected user role:', userRole);
 
     // Build filter object
     let filter = {};
@@ -333,13 +344,16 @@ export const getProducts = async (req, res) => {
       filter.isFeatured = isFeatured === "true";
     }
 
-    // 👇 Only admin can see inactive products
+    // ✅ FIXED: Admin should see ALL products by default
     if (userRole !== "admin") {
-      // non-admin user can only see active products
+      // Non-admin users can only see active products
       filter.isActive = true;
-    } else if (isActive !== undefined) {
-      // admin can filter by isActive if they want
-      filter.isActive = isActive === "true";
+    } else {
+      // Admin can filter by isActive if specified, otherwise see ALL
+      if (isActive !== undefined) {
+        filter.isActive = isActive === "true";
+      }
+      // If isActive is not provided, don't apply any isActive filter for admin
     }
 
     // Sort options
@@ -385,6 +399,64 @@ export const getProducts = async (req, res) => {
   }
 };
 
+
+// Get all products for admin dashboard (including inactive)
+export const getAdminProducts = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 50,
+      search,
+      category,
+      sortBy = "createdAt",
+      sortOrder = "desc"
+    } = req.query;
+
+    // Build filter object - NO isActive filter for admin
+    let filter = {};
+
+    if (search) {
+      const searchRegex = new RegExp(search, 'i');
+      filter.$or = [
+        { name: { $regex: searchRegex } },
+        { brand: { $regex: searchRegex } },
+        { slug: { $regex: searchRegex } },
+      ];
+    }
+
+    if (category) {
+      filter.category = category;
+    }
+
+    // Admin sees everything - no isActive filter
+
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === "desc" ? -1 : 1;
+
+    const products = await Product.find(filter)
+      .populate("category subCategory")
+      .sort(sortOptions)
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await Product.countDocuments(filter);
+
+    res.status(200).json({
+      success: true,
+      products,
+      totalPages: Math.ceil(total / limit),
+      currentPage: Number(page),
+      total
+    });
+  } catch (error) {
+    console.error('Error fetching admin products:', error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching products",
+      error: error.message
+    });
+  }
+};
 
 // Get a single product by ID
 export const getProductById = async (req, res) => {
@@ -465,6 +537,8 @@ export const updateProduct = async (req, res) => {
       stock: parseInt(req.body.stock) || 0,
       lowStockAlert: parseInt(req.body.lowStockAlert) || 5,
       weight: parseFloat(req.body.weight) || 0,
+      aplusContent: req.body.aplusContent || '',
+      bulletPoints: Array.isArray(req.body.bulletPoints) ? req.body.bulletPoints : [],
     };
     
     if (req.body.dimensions) {

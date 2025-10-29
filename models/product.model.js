@@ -9,14 +9,14 @@ const imageSchema = new mongoose.Schema(
   { _id: false }
 );
 
-// ✅ পরিবর্তিত: ভেরিয়েন্টের ডাইমেনশন (যেমন Color, Size) সংজ্ঞায়িত করার জন্য স্কিমা
+
 const optionSchema = new mongoose.Schema(
   {
     name: { 
       type: String, 
       required: true, 
       trim: true, 
-      // enum: ['Color', 'Size', 'Material', 'Style', 'Bundle'], // ব্যবহারকারীর অনুরোধে এই enum সরানো হয়েছে।
+      // enum: ['Color', 'Size', 'Material', 'Style', 'Bundle'], 
       default: 'Color' 
     },
     values: [{ type: String, trim: true, required: true }],
@@ -24,12 +24,12 @@ const optionSchema = new mongoose.Schema(
   { _id: false }
 );
 
-// পরিবর্তিত: প্রতিটি কম্বিনেশনের (যেমন Black-S) জন্য ভেরিয়েন্ট স্কিমা
+
 const variantSchema = new mongoose.Schema(
   {
     options: [ 
       {
-        name: { type: String, trim: true, required: true }, // e.g., "Color" (এখন যেকোনো স্ট্রিং হতে পারে)
+        name: { type: String, trim: true, required: true }, // e.g., "Color" 
         value: { type: String, trim: true, required: true }, // e.g., "Red"
         _id: false
       }
@@ -61,6 +61,15 @@ const productSchema = new mongoose.Schema(
       index: true,
     },
     description: { type: String, trim: true },
+    aplusContent: {
+      type: String, 
+      trim: true 
+    },
+    bulletPoints: [{ 
+      type: String, 
+      trim: true,
+      maxlength: [200, "Bullet point cannot exceed 200 characters"]
+    }],
     brand: { type: String, trim: true, default: "Generic" },
     sku: { type: String, unique: true, sparse: true },
     category: { 

@@ -19,6 +19,10 @@ const categorySchema = new mongoose.Schema(
       type: String,
       maxlength: [500, "Description cannot exceed 500 characters"],
     },
+    aplusContent: {
+      type: String, 
+      trim: true,
+    },
     parentCategory: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",

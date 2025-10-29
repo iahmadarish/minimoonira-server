@@ -33,10 +33,17 @@ export const getCategories = asyncHandler(async (req, res) => {
     .filter()
     .search(["name", "description"])
     .sort()
-    .limitFields()
+    .limitFields() // এটি req.query.fields এর উপর ভিত্তি করে কাজ করে
     .paginate()
 
-  const categories = await features.query.populate("parentCategory", "name slug")
+  // ✅ MODIFIED: .select('+aplusContent') যোগ করা যেতে পারে যদি limitFields() এটিকে বাদ দিয়ে দেয়,
+  // অথবা যদি আপনি APIFeatures এর ভিতরেই limitFields() এ aplusContent যোগ করে দেন।
+  // যেহেতু আপনি মডেলের ক্ষেত্রে aplusContent যোগ করেছেন, তাই এটি .find() এ সাধারণত অন্তর্ভুক্ত থাকবে 
+  // যদি না limitFields() এটি বাদ দেয়।
+  const categories = await features.query
+    .select('+aplusContent') // এটি নিশ্চিত করবে যে aplusContent ফিল্ডটি সবসময় সিলেক্ট হচ্ছে
+    .populate("parentCategory", "name slug")
+  
   const total = await Category.countDocuments()
 
   res.status(200).json({
@@ -51,7 +58,8 @@ export const getCategories = asyncHandler(async (req, res) => {
 // @route   GET /api/v1/categories/:id
 // @access  Public
 export const getCategory = asyncHandler(async (req, res) => {
-  const category = await Category.findById(req.params.id).populate("parentCategory", "name slug").populate("children")
+  // ✅ NO CHANGE NEEDED: findById() will return all fields, including aplusContent.
+  const category = await Category.findById(req.params.id).populate("parentCategory", "name slug").populate("children") 
 
   if (!category) {
     return res.status(404).json({
