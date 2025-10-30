@@ -21,7 +21,7 @@ const categorySchema = new mongoose.Schema(
     },
     aplusContent: {
       type: String, 
-      trim: true,
+      default: "",
     },
     parentCategory: {
       type: mongoose.Schema.Types.ObjectId,
