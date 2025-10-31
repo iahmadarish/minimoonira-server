@@ -22,25 +22,46 @@ const calculateShippingPrice = (shippingZone, orderAmount) => {
 
 // ✅ Product Stock Update
 export const updateProductStock = async (orderItems, action = 'decrease') => {
-  for (const item of orderItems) {
-    const product = await Product.findById(item.product);
-    if (!product) continue;
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    for (const item of orderItems) {
+      const product = await Product.findById(item.product).session(session);
+      if (!product) continue;
 
-    const quantity = action === 'decrease' ? -item.quantity : item.quantity;
+      const quantity = action === 'decrease' ? -item.quantity : item.quantity;
 
-    if (product.hasVariants && item.variant && item.variant.sku) {
-      const variantIndex = product.variants.findIndex(v => v.sku === item.variant.sku);
-      if (variantIndex > -1) {
-        product.variants[variantIndex].stock += quantity;
+      // Variant product হলে variant stock আপডেট করুন
+      if (product.hasVariants && item.variant && item.variant.sku) {
+        const variantIndex = product.variants.findIndex(v => v.sku === item.variant.sku);
+        if (variantIndex > -1) {
+          product.variants[variantIndex].stock += quantity;
+          // Ensure stock doesn't go negative
+          if (product.variants[variantIndex].stock < 0) {
+            product.variants[variantIndex].stock = 0;
+          }
+        }
+      } else {
+        // Simple product হলে main stock আপডেট করুন
+        product.stock += quantity;
+        // Ensure stock doesn't go negative
+        if (product.stock < 0) {
+          product.stock = 0;
+        }
       }
-    } else {
-      product.stock += quantity;
-    }
 
-    await product.save({ validateBeforeSave: false });
+      await product.save({ session, validateBeforeSave: false });
+    }
+    
+    await session.commitTransaction();
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
   }
 };
-
 // @desc    Create a new order
 // @route   POST /api/v1/orders
 // @access  Public/Private
@@ -49,11 +70,12 @@ export const createOrder = async (req, res, next) => {
     const {
       shippingAddress,
       paymentMethod,
-      shippingPrice, // যদি ফ্রন্টএন্ড থেকে আসে
+      shippingPrice,
       taxPrice = 0,
       isGuest = false,
       guestEmail,
-      guestItems
+      guestItems,
+      orderItems // Direct order items (if provided)
     } = req.body;
 
     // --- ১. প্রাথমিক ভ্যালিডেশন ---
@@ -65,24 +87,34 @@ export const createOrder = async (req, res, next) => {
       });
     }
 
-    let orderItems = [];
+    let finalOrderItems = [];
     let user = null;
+
+    // --- ২. অর্ডার আইটেম প্রস্তুত করুন ---
     if (isGuest) {
+      // গেস্ট ইউজার ভ্যালিডেশন
       if (!guestEmail || !guestItems || guestItems.length === 0) {
         return res.status(400).json({ 
           success: false, 
           message: 'Guest email and items are required' 
         });
       }
-      orderItems = guestItems.map(item => ({
-        name: item.name,
-        product: item.productId,
-        variant: item.variant || {},
-        quantity: item.quantity,
-        price: item.priceAtPurchase || item.price,
-        image: item.image || ''
-      }));
+      
+      // গেস্ট ইউজারের জন্য অর্ডার আইটেম প্রস্তুত করুন
+      finalOrderItems = guestItems.map(item => {
+        const variantData = convertVariantToOrderFormat(item.variant);
+        
+        return {
+          name: item.name,
+          product: item.productId,
+          variant: variantData, // কনভার্টেড variant ডেটা
+          quantity: parseInt(item.quantity) || 1,
+          price: parseFloat(item.priceAtPurchase || item.price || 0),
+          image: item.image || ''
+        };
+      });
     } else {
+      // লগ ইন ইউজার ভ্যালিডেশন
       if (!req.user) {
         return res.status(401).json({ 
           success: false, 
@@ -91,7 +123,10 @@ export const createOrder = async (req, res, next) => {
       }
 
       user = req.user.id;
-      const cart = await Cart.findOne({ user }).populate('items.product', 'name slug imageGroups');
+      
+      // কার্ট থেকে আইটেম লোড করুন
+      const cart = await Cart.findOne({ user })
+        .populate('items.product', 'name slug imageGroups variants hasVariants');
       
       if (!cart || cart.items.length === 0) {
         return res.status(400).json({ 
@@ -100,95 +135,220 @@ export const createOrder = async (req, res, next) => {
         });
       }
 
-      orderItems = cart.items.map(item => ({
-        name: item.product.name,
-        product: item.product._id,
-        variant: item.variant || {},
-        quantity: item.quantity,
-        price: item.priceAtPurchase,
-        image: item.product.imageGroups?.[0]?.images?.[0]?.url || ''
-      }));
-    }
-    const itemsPrice = orderItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+      // লগ ইন ইউজারের জন্য অর্ডার আইটেম প্রস্তুত করুন
+      finalOrderItems = cart.items.map(item => {
+        const variantData = convertVariantToOrderFormat(item.variant);
+        const product = item.product;
+        
+        // ইমেজ URL তৈরি করুন
+        let imageUrl = '';
+        if (item.imageGroupName && product.imageGroups) {
+          // Variant-specific image group
+          const variantImageGroup = product.imageGroups.find(
+            group => group.name === item.imageGroupName
+          );
+          if (variantImageGroup && variantImageGroup.images.length > 0) {
+            imageUrl = variantImageGroup.images[0].url;
+          }
+        }
+        
+        // Fallback to main product image
+        if (!imageUrl && product.imageGroups && product.imageGroups.length > 0) {
+          const mainGroup = product.imageGroups.find(group => group.name === 'Main') || product.imageGroups[0];
+          if (mainGroup && mainGroup.images.length > 0) {
+            imageUrl = mainGroup.images[0].url;
+          }
+        }
 
-    const finalShippingPrice = shippingPrice || 0; 
+        return {
+          name: getOrderItemName(product.name, item.variant, item.variantDisplayName),
+          product: product._id,
+          variant: variantData,
+          quantity: parseInt(item.quantity) || 1,
+          price: parseFloat(item.priceAtPurchase || 0),
+          image: imageUrl
+        };
+      });
+    }
+
+    // --- ৩. প্রাইস ক্যালকুলেশন ---
+    const itemsPrice = finalOrderItems.reduce((acc, item) => {
+      return acc + (item.price * item.quantity);
+    }, 0);
+
+    const finalShippingPrice = parseFloat(shippingPrice) || 0;
+    const finalTaxPrice = parseFloat(taxPrice) || 0;
     
-    const totalPrice = itemsPrice + finalShippingPrice + (taxPrice || 0);
+    const totalPrice = itemsPrice + finalShippingPrice + finalTaxPrice;
+
+    // --- ৪. নতুন অর্ডার তৈরি করুন ---
     const newOrder = new Order({
       user: isGuest ? null : user,
       isGuest,
       guestEmail: isGuest ? guestEmail : null,
-      orderItems,
-      shippingAddress,
+      orderItems: finalOrderItems,
+      shippingAddress: {
+        name: shippingAddress.name,
+        phone: shippingAddress.phone,
+        email: shippingAddress.email,
+        addressLine1: shippingAddress.addressLine1,
+        addressLine2: shippingAddress.addressLine2 || '',
+        district: shippingAddress.district,
+        upazila: shippingAddress.upazila,
+        zipCode: shippingAddress.zipCode || '',
+        country: shippingAddress.country || 'Bangladesh'
+      },
       paymentMethod,
       shippingPrice: finalShippingPrice,
-      taxPrice: taxPrice || 0,
+      taxPrice: finalTaxPrice,
       totalPrice,
       orderStatus: 'Pending',
       paymentStatus: 'Pending'
     });
 
+    // --- ৫. অর্ডার সেভ করুন ---
     await newOrder.save();
+
+    // --- ৬. পেমেন্ট মেথড অনুযায়ী প্রসেস করুন ---
     if (paymentMethod === 'SSLCommerz') {
-        const paymentData = {
-            amount: totalPrice,
-            cus_name: shippingAddress.name,
-            cus_email: shippingAddress.email || newOrder.guestEmail || 'customer@example.com', 
-            cus_phone: shippingAddress.phone,
-            shippingAddress: shippingAddress,
-        };
+      const paymentData = {
+        amount: totalPrice,
+        cus_name: shippingAddress.name,
+        cus_email: shippingAddress.email || newOrder.guestEmail || 'customer@example.com', 
+        cus_phone: shippingAddress.phone,
+        shippingAddress: shippingAddress,
+      };
 
-        const paymentInit = await initializePayment(newOrder._id.toString(), paymentData);
+      const paymentInit = await initializePayment(newOrder._id.toString(), paymentData);
 
-        if (paymentInit.status === 'SUCCESS' && paymentInit.GatewayPageURL) {
-            if (!isGuest && req.user) {
-                await Cart.findOneAndDelete({ user: req.user.id });
-            }
-            return res.status(201).json({
-                success: true,
-                message: 'Payment initialized. Redirecting to gateway.',
-                order: newOrder,
-                redirectUrl: paymentInit.GatewayPageURL 
-            });
-        } else {
-            console.error('SSLCommerz initialization failed:', paymentInit);
-            newOrder.orderStatus = 'Cancelled';
-            newOrder.paymentStatus = 'Failed';
-            await newOrder.save();
-
-            return res.status(500).json({
-                success: false,
-                message: paymentInit.failedreason || 'Failed to initiate online payment'
-            });
-        }
-    } else if (paymentMethod === 'COD') {
-        await updateProductStock(orderItems, 'decrease');
+      if (paymentInit.status === 'SUCCESS' && paymentInit.GatewayPageURL) {
+        // পেমেন্ট সফল হলে কার্ট ক্লিয়ার করুন
         if (!isGuest && req.user) {
-            await Cart.findOneAndDelete({ user: req.user.id });
+          await Cart.findOneAndDelete({ user: req.user.id });
         }
-
-        res.status(201).json({ 
-            success: true, 
-            message: 'Order placed successfully (COD)',
-            order: newOrder 
+        
+        return res.status(201).json({
+          success: true,
+          message: 'Payment initialized. Redirecting to gateway.',
+          order: newOrder,
+          redirectUrl: paymentInit.GatewayPageURL 
         });
-    } else {
+      } else {
+        console.error('SSLCommerz initialization failed:', paymentInit);
+        
+        // পেমেন্ট ফেইল হলে অর্ডার ক্যানসেল করুন
         newOrder.orderStatus = 'Cancelled';
         newOrder.paymentStatus = 'Failed';
         await newOrder.save();
-        
-        return res.status(400).json({
-            success: false,
-            message: 'Invalid payment method selected.'
+
+        return res.status(500).json({
+          success: false,
+          message: paymentInit.failedreason || 'Failed to initiate online payment'
         });
+      }
+    } else if (paymentMethod === 'COD') {
+      // স্টক আপডেট করুন
+      await updateProductStock(finalOrderItems, 'decrease');
+      
+      // কার্ট ক্লিয়ার করুন
+      if (!isGuest && req.user) {
+        await Cart.findOneAndDelete({ user: req.user.id });
+      }
+
+      return res.status(201).json({ 
+        success: true, 
+        message: 'Order placed successfully (COD)',
+        order: newOrder 
+      });
+    } else {
+      // ইনভ্যালিড পেমেন্ট মেথড
+      newOrder.orderStatus = 'Cancelled';
+      newOrder.paymentStatus = 'Failed';
+      await newOrder.save();
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payment method selected.'
+      });
     }
 
   } catch (error) {
     console.error('Order creation error:', error);
+    
+    // Mongoose validation error handle করুন
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors
+      });
+    }
+    
     next(error);
   }
 };
 
+// --- HELPER FUNCTIONS ---
+
+/**
+ * Variant ডেটাকে অর্ডার ফরম্যাটে কনভার্ট করে
+ */
+const convertVariantToOrderFormat = (variant) => {
+  if (!variant || Object.keys(variant).length === 0) {
+    return undefined; // কোনো variant ডেটা নেই
+  }
+
+  // নতুন ফরম্যাট (options array)
+  if (variant.options && Array.isArray(variant.options) && variant.options.length > 0) {
+    const firstOption = variant.options[0];
+    return {
+      name: firstOption.name || 'Variant',
+      value: firstOption.value || 'Default',
+      sku: variant.variantId || variant.sku || undefined
+    };
+  }
+  
+  // পুরানো ফরম্যাট (সরাসরি name, value)
+  if (variant.name || variant.value) {
+    return {
+      name: variant.name || 'Variant',
+      value: variant.value || 'Default', 
+      sku: variant.sku || variant.variantId || undefined
+    };
+  }
+  
+  // শুধু variantId থাকলে
+  if (variant.variantId) {
+    return {
+      name: 'Variant',
+      value: 'Default',
+      sku: variant.variantId
+    };
+  }
+  
+  return undefined;
+};
+
+/**
+ * অর্ডার আইটেমের নাম তৈরি করে
+ */
+const getOrderItemName = (productName, variant, variantDisplayName) => {
+  let itemName = productName;
+  
+  if (variantDisplayName) {
+    itemName += ` - ${variantDisplayName}`;
+  } else if (variant && variant.options && Array.isArray(variant.options)) {
+    const variantText = variant.options.map(opt => `${opt.name}: ${opt.value}`).join(', ');
+    if (variantText) {
+      itemName += ` - ${variantText}`;
+    }
+  } else if (variant && (variant.name || variant.value)) {
+    itemName += ` - ${variant.name || 'Variant'}: ${variant.value || 'Default'}`;
+  }
+  
+  return itemName;
+};
 // @desc    Get my orders
 // @route   GET /api/v1/orders
 // @access  Private
