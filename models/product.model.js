@@ -163,45 +163,116 @@ productSchema.pre("save", function (next) {
   next();
 });
 
+productSchema.statics.generateAllVariants = function(variantOptions, baseVariantData = {}) {
+  if (!variantOptions || variantOptions.length === 0) return [];
+
+  // Recursive function to generate all combinations
+  const generateCombinations = (options, currentIndex = 0, currentCombination = []) => {
+    if (currentIndex === options.length) {
+      return [currentCombination];
+    }
+
+    const currentOption = options[currentIndex];
+    const combinations = [];
+
+    for (const value of currentOption.values) {
+      const newCombination = [
+        ...currentCombination,
+        { name: currentOption.name, value: value }
+      ];
+      combinations.push(...generateCombinations(options, currentIndex + 1, newCombination));
+    }
+
+    return combinations;
+  };
+
+  const allCombinations = generateCombinations(variantOptions);
+  
+  // Convert to variant objects
+  return allCombinations.map((combination, index) => ({
+    options: combination,
+    basePrice: baseVariantData.basePrice || 0,
+    discountPercentage: baseVariantData.discountPercentage || 0,
+    discountStart: baseVariantData.discountStart,
+    discountEnd: baseVariantData.discountEnd,
+    stock: 0, // Default stock 0
+    imageGroupName: baseVariantData.imageGroupName || '',
+    sku: baseVariantData.sku ? `${baseVariantData.sku}-${index + 1}` : `VAR-${index + 1}`
+  }));
+};
+
 // Pricing Calculation Middleware
-function calculatePrice(basePrice, discountPercentage, discountStart, discountEnd) {
+function calculatePrice(
+  variantBasePrice, 
+  variantDiscountPercentage, 
+  variantDiscountStart, 
+  variantDiscountEnd,
+  productDiscountPercentage,
+  productDiscountStart, 
+  productDiscountEnd 
+) {
   const now = new Date();
-  const startDate = discountStart ? new Date(discountStart) : null;
-  const endDate = discountEnd ? new Date(discountEnd) : null;
   
-  const isDiscountActive = discountPercentage > 0 && 
-                          startDate && 
-                          endDate &&
-                          now >= startDate && 
-                          now <= endDate;
-  
-  if (isDiscountActive) {
-    return Math.max(0, basePrice - (basePrice * discountPercentage) / 100);
+  // প্রথমে variant discount check করুন
+  if (variantDiscountPercentage > 0) {
+    const variantStartDate = variantDiscountStart ? new Date(variantDiscountStart) : null;
+    const variantEndDate = variantDiscountEnd ? new Date(variantDiscountEnd) : null;
+    
+    const isVariantDiscountActive = 
+      (!variantStartDate && !variantEndDate) || // No date restriction
+      (variantStartDate && variantEndDate && now >= variantStartDate && now <= variantEndDate);
+    
+    if (isVariantDiscountActive) {
+      return Math.max(0, variantBasePrice - (variantBasePrice * variantDiscountPercentage) / 100);
+    }
   }
-  return basePrice;
+  
+  // Variant discount না থাকলে product level discount check করুন
+  if (productDiscountPercentage > 0) {
+    const productStartDate = productDiscountStart ? new Date(productDiscountStart) : null;
+    const productEndDate = productDiscountEnd ? new Date(productDiscountEnd) : null;
+    
+    const isProductDiscountActive = 
+      (!productStartDate && !productEndDate) || // No date restriction
+      (productStartDate && productEndDate && now >= productStartDate && now <= productEndDate);
+    
+    if (isProductDiscountActive) {
+      return Math.max(0, variantBasePrice - (variantBasePrice * productDiscountPercentage) / 100);
+    }
+  }
+  
+  // কোনো discount না থাকলে base price return করুন
+  return variantBasePrice;
 }
 
 // Pre-save hook
 productSchema.pre("save", function (next) {
+  // Main product price calculation
   this.price = calculatePrice(
     this.basePrice,
     this.discountPercentage,
     this.discountStart,
+    this.discountEnd,
+    this.discountPercentage, // product level discount
+    this.discountStart,      // product level dates
     this.discountEnd
   );
 
   if (this.hasVariants && this.variants && this.variants.length > 0) {
     this.variants = this.variants.map((variant) => {
       const variantBasePrice = variant.basePrice || this.basePrice;
-      const variantDiscountPercentage = variant.discountPercentage || this.discountPercentage;
-      const variantDiscountStart = variant.discountStart || this.discountStart;
-      const variantDiscountEnd = variant.discountEnd || this.discountEnd;
+      const variantDiscountPercentage = variant.discountPercentage || 0;
+      const variantDiscountStart = variant.discountStart || null;
+      const variantDiscountEnd = variant.discountEnd || null;
       
       variant.price = calculatePrice(
         variantBasePrice,
         variantDiscountPercentage,
         variantDiscountStart,
-        variantDiscountEnd
+        variantDiscountEnd,
+        this.discountPercentage,  // Pass product level discount
+        this.discountStart,       // Pass product level dates  
+        this.discountEnd
       );
       return variant;
     });
