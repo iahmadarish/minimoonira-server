@@ -1,6 +1,6 @@
 // models/campaign.model.js
 import mongoose from 'mongoose';
-import slugify from 'slugify'; // যদি না থাকে তবে install করুন: npm install slugify
+import slugify from 'slugify'; 
 
 const campaignSchema = new mongoose.Schema({
   user: {
@@ -16,7 +16,7 @@ const campaignSchema = new mongoose.Schema({
   slug: {
     type: String,
     unique: true,
-    sparse: true // 🔥 sparse true করুন যাতে null duplicate না হয়
+    sparse: true 
   },
   cartItems: [{
     product: {
@@ -42,10 +42,9 @@ const campaignSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// 🔥 Pre-save hook to generate slug
+
 campaignSchema.pre('save', function(next) {
   if (this.isNew) {
-    // Generate unique slug using timestamp and user ID
     const timestamp = Date.now().toString(36);
     const randomStr = Math.random().toString(36).substring(2, 8);
     this.slug = `campaign-${timestamp}-${randomStr}`;
@@ -53,7 +52,6 @@ campaignSchema.pre('save', function(next) {
   next();
 });
 
-// Index for better performance
 campaignSchema.index({ user: 1, status: 1 });
 campaignSchema.index({ expiresAt: 1 });
 

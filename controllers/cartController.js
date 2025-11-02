@@ -1,17 +1,11 @@
 import Cart from '../models/cart.model.js';
 import Product from '../models/product.model.js';
-import Campaign from '../models/campaign.model.js';
-import Promotion from '../models/promotion.model.js';
+// import Campaign from '../models/campaign.model.js';
+// import Promotion from '../models/promotion.model.js';
 
-
-
-// @desc    Get user cart
-// @route   GET /api/v1/cart
-// @access  Private
 
 export const getCart = async (req, res, next) => {
     
-    // 1. অথেন্টিকেশন চেক
     if (!req.user || !req.user.id) {
         return res.status(401).json({ 
             success: false, 
@@ -20,18 +14,13 @@ export const getCart = async (req, res, next) => {
     }
     
     try {
-        // 2. কার্ট এবং প্রোডাক্টের প্রয়োজনীয় ফিল্ড পপুলেট করা
         let cart = await Cart.findOne({ user: req.user.id })
             .populate({
                 path: 'items.product',
                 select: 'name slug imageGroups variants hasVariants price basePrice discountPercentage stockStatus isActive'
             });
-
-        // কার্ট না থাকলে নতুন কার্ট তৈরি করা
         if (!cart) {
-            const newCart = await Cart.create({ user: req.user.id, items: [] });
-            
-            // 🔥 নতুন কার্টের জন্য active campaigns চেক করুন
+            const newCart = await Cart.create({ user: req.user.id, items: [] });          
             let activeCampaigns = [];
             try {
                 const Campaign = (await import('../models/campaign.model.js')).default;
