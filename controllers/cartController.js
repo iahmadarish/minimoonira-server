@@ -1,73 +1,104 @@
-// cartController.js
-
 import Cart from '../models/cart.model.js';
 import Product from '../models/product.model.js';
 
 // @desc    Get user cart
 // @route   GET /api/v1/cart
 // @access  Private
-export const getCart = async (req, res) => {
-  if (!req.user || !req.user.id) {
-    return res.status(401).json({ 
-      success: false, 
-      message: 'Not authorized. Please log in to view your cart.' 
-    });
-  }
-  
-  const cart = await Cart.findOne({ user: req.user.id })
-    .populate('items.product', 'name slug imageGroups variants hasVariants variantOptions');
-  
-  if (!cart) {
-    const newCart = await Cart.create({ user: req.user.id, items: [] });
-    return res.status(200).json({ success: true, cart: newCart });
-  }
-  
-  // কার্ট আইটেম প্রসেসিং - নতুন ভেরিয়েন্ট স্ট্রাকচার অনুযায়ী
-  const processedCart = {
-    ...cart.toObject(),
-    items: cart.items.map(item => {
-      const product = item.product;
-      if (!product) return item;
-      
-      // ভ্যারিয়েন্ট সিলেক্ট করা থাকলে সেই ইমেজ নিন
-      let productImage = '';
-      if (product.imageGroups && product.imageGroups.length > 0) {
-        // নতুন ভেরিয়েন্ট স্ট্রাকচার অনুযায়ী ইমেজ গ্রুপ খুঁজুন
-        if (item.variant && item.variant.imageGroupName) {
-          const variantImageGroup = product.imageGroups.find(
-            group => group.name === item.variant.imageGroupName
-          );
-          if (variantImageGroup && variantImageGroup.images.length > 0) {
-            productImage = variantImageGroup.images[0].url;
-          }
+export const getCart = async (req, res, next) => {
+    
+    // 1. অথেন্টিকেশন চেক
+    if (!req.user || !req.user.id) {
+        return res.status(401).json({ 
+            success: false, 
+            message: 'Not authorized. Please log in to view your cart.' 
+        });
+    }
+    
+    try {
+        // 2. কার্ট এবং প্রোডাক্টের প্রয়োজনীয় ফিল্ড পপুলেট করা
+        let cart = await Cart.findOne({ user: req.user.id })
+            .populate({
+                path: 'items.product',
+                select: 'name slug imageGroups variants hasVariants price basePrice discountPercentage'
+            });
+
+        // কার্ট না থাকলে নতুন কার্ট তৈরি করা
+        if (!cart) {
+            const newCart = await Cart.create({ user: req.user.id, items: [] });
+            return res.status(200).json({ success: true, cart: newCart });
+        }
+
+        let isCartModified = false; // দাম/আইটেম পরিবর্তন হয়েছে কিনা ট্র্যাক করার জন্য
+        const itemsToKeep = [];
+        
+        // 3. প্রতিটি আইটেম লুপ করে দাম এবং প্রোডাক্ট স্ট্যাটাস পরীক্ষা করা
+        for (const item of cart.items) {
+            const product = item.product;
+            
+            // যদি প্রোডাক্ট ডাটাবেস থেকে মুছে ফেলা হয়ে থাকে
+            if (!product) {
+                isCartModified = true;
+                // এই ক্ষেত্রে আইটেমটি বাদ দেওয়া হবে, তাই itemsToKeep তে যোগ করা হচ্ছে না।
+                continue; 
+            }
+
+            let livePrice = product.price; // ডিফল্টভাবে প্রোডাক্টের মূল দাম
+            let currentItemPrice = item.priceAtPurchase;
+            
+            // ভেরিয়েন্ট (Variant) এর দাম খুঁজে বের করা
+            if (product.hasVariants && item.variant?.sku) {
+                const liveVariant = product.variants.find(v => v.sku === item.variant.sku);
+                
+                // যদি ভেরিয়েন্ট খুঁজে পাওয়া যায়, তবে সেই ভেরিয়েন্টের দাম ব্যবহার করা
+                if (liveVariant) {
+                    livePrice = liveVariant.price;
+                } else {
+                    // ভেরিয়েন্ট খুঁজে না পেলে (হয়তো ডিলিট হয়েছে বা SKU বদলেছে), আইটেমটি বাদ দেওয়া
+                    isCartModified = true;
+                    continue; 
+                }
+            }
+            
+            // 4. দামের তুলনা: যদি কার্টে সেভ করা দাম লাইভ দামের সাথে না মেলে
+            // .toFixed(2) ব্যবহার করা হয়েছে ফ্লোটিং পয়েন্ট তুলনা করার জটিলতা এড়াতে।
+            if (currentItemPrice.toFixed(2) !== livePrice.toFixed(2)) {
+                
+                // দাম আপডেট করা
+                item.priceAtPurchase = livePrice; 
+                isCartModified = true;
+            }
+
+            // এই আইটেমটি রেখে দেওয়া হবে
+            itemsToKeep.push(item);
         }
         
-        // ভ্যারিয়েন্ট ইমেজ না পেলে মেইন ইমেজ নিন
-        if (!productImage) {
-          const mainGroup = product.imageGroups.find(group => group.name === 'Main') || product.imageGroups[0];
-          productImage = mainGroup.images[0]?.url || '';
+        // 5. যদি কোনো পরিবর্তন হয়, কার্ট আপডেট করে সেভ করা
+        if (isCartModified) {
+            cart.items = itemsToKeep; // ডিলিট হওয়া আইটেম বা ইনভ্যালিড ভেরিয়েন্ট বাদ দেওয়া হলো
+            
+            // মোট দাম পুনরায় গণনা করা (pre-save hook ব্যবহার করেও এটি করা যায়, তবে ম্যানুয়ালি সেট করা নিরাপদ)
+            let newTotalPrice = cart.items.reduce((total, item) => total + (item.priceAtPurchase * item.quantity), 0);
+            cart.totalPrice = newTotalPrice;
+            
+            // ডাটাবেসে পরিবর্তনগুলো সংরক্ষণ করা
+            await cart.save();
+            
+            // সেভ করার পর, আবার পপুলেট করে সঠিক স্ট্রাকচার নিশ্চিত করা
+            await cart.populate({
+                path: 'items.product',
+                select: 'name slug imageGroups variants hasVariants price basePrice discountPercentage'
+            });
         }
-      }
-      
-      // ভেরিয়েন্ট ডিসপ্লে নাম তৈরি করুন
-      let variantDisplayName = '';
-      if (item.variant && item.variant.options && Array.isArray(item.variant.options)) {
-        variantDisplayName = item.variant.options.map(opt => `${opt.name}: ${opt.value}`).join(', ');
-      } else if (item.variant && item.variant.displayName) {
-        variantDisplayName = item.variant.displayName;
-      }
-      
-      return {
-        ...item.toObject(),
-        name: product.name,
-        image: productImage,
-        productId: product._id,
-        variantDisplayName: variantDisplayName
-      };
-    })
-  };
-  
-  res.status(200).json({ success: true, cart: processedCart });
+
+        // 6. আপডেট হওয়া বা যাচাই করা কার্ট ফ্রন্টএন্ডে পাঠানো
+        res.status(200).json({ success: true, cart: cart });
+        
+    } catch (error) {
+        console.error("❌ Cart Controller getCart Error:", error);
+        
+        // General server error handling
+        next(error); 
+    }
 };
 
 // @desc    Add item to cart
@@ -130,8 +161,8 @@ export const addItemToCart = async (req, res, next) => {
       priceToUse = finalPrice || variantItem.price; 
       variantSku = variantItem.sku;
       variantData = {
-        variantId: variant.variantId || variantItem._id,
-        options: variant.options,
+        variantId: variantItem._id, 
+        options: variant.options,   
         imageGroupName: variant.imageGroupName || variantItem.imageGroupName,
         displayName: variant.displayName || variant.options.map(opt => `${opt.name}: ${opt.value}`).join(', ')
       };
@@ -142,105 +173,80 @@ export const addItemToCart = async (req, res, next) => {
       console.log('✅ No variant selected, using product price:', priceToUse);
     }
 
-    // ফলব্যাক: যদি priceToUse undefined/null হয়
     if (priceToUse === null || priceToUse === undefined || priceToUse <= 0) {
       priceToUse = product.price || product.basePrice || 0;
     }
 
-    // বেস প্রাইস এবং ডিসকাউন্ট সেট করুন
+
     const basePriceToUse = basePrice || product.basePrice || priceToUse;
     const discountPercentageToUse = discountPercentage || product.discountPercentage || 0;
 
-    console.log('✅ Final price to use:', priceToUse);
-    console.log('✅ Base price:', basePriceToUse);
-    console.log('✅ Discount percentage:', discountPercentageToUse);
+    console.log(' Final price to use:', priceToUse);
+    console.log(' Base price:', basePriceToUse);
+    console.log(' Discount percentage:', discountPercentageToUse);
 
-    // ইউজারের কার্ট খুঁজুন অথবা তৈরি করুন
     let cart = await Cart.findOne({ user: req.user.id });
 
     if (!cart) {
       cart = await Cart.create({ user: req.user.id, items: [] });
-      console.log('✅ New cart created for user:', req.user.id);
+      console.log('New cart created for user:', req.user.id);
     }
 
-    // নতুন আইটেম - নতুন স্ট্রাকচার অনুযায়ী
     const newItem = {
       product: productId,
       quantity,
       priceAtPurchase: priceToUse,
-      basePrice: basePriceToUse,
+      basePrice: basePriceToUse, 
       discountPercentage: discountPercentageToUse,
       variant: variantData ? {
-        variantId: variantData.variantId,
-        options: variantData.options,
+        variantId: variantData.variantId, 
+        options: variantData.options,     
         imageGroupName: variantData.imageGroupName,
         displayName: variantData.displayName,
         sku: variantSku
       } : null
     };
-
-    // চেক করুন: আইটেম কার্টে আছে কিনা - নতুন ভেরিয়েন্ট আইডেন্টিফায়ার অনুযায়ী
     const existingItem = cart.items.find(item => {
-      // একই প্রোডাক্ট এবং একই ভেরিয়েন্ট চেক করুন
-      if (item.product.toString() !== productId) return false;
-      
-      // উভয় আইটেমে ভেরিয়েন্ট নেই
-      if (!item.variant && !variantData) return true;
-      
-      // একটিতে ভেরিয়েন্ট আছে, অন্যটিতে নেই
-      if (!item.variant || !variantData) return false;
-      
-      // ভেরিয়েন্ট আইডি চেক করুন
+      if (item.product.toString() !== productId) return false;      
+      if (!item.variant && !variantData) return true;      
+      if (!item.variant || !variantData) return false;  
       if (item.variant.variantId && variantData.variantId) {
         return item.variant.variantId.toString() === variantData.variantId.toString();
-      }
-      
-      // ভেরিয়েন্ট অপশনস চেক করুন
+      }      
       if (item.variant.options && variantData.options) {
         const itemOptions = JSON.stringify(item.variant.options.sort((a, b) => a.name.localeCompare(b.name)));
         const newOptions = JSON.stringify(variantData.options.sort((a, b) => a.name.localeCompare(b.name)));
         return itemOptions === newOptions;
-      }
-      
+      }      
       return false;
     });
 
     if (existingItem) {
       existingItem.quantity += quantity;
-      existingItem.priceAtPurchase = priceToUse; // প্রাইস আপডেট করুন
+      existingItem.priceAtPurchase = priceToUse;
       existingItem.basePrice = basePriceToUse;
       existingItem.discountPercentage = discountPercentageToUse;
-      console.log('✅ Item already in cart, updated quantity:', existingItem.quantity);
+      console.log('Item already in cart, updated quantity:', existingItem.quantity);
     } else {
       cart.items.push(newItem);
-      console.log('✅ New item added to cart');
+      console.log('New item added to cart');
     }
-
-    // কার্ট সেভ করুন
     await cart.save();
-    
-    // পপুলেট করে ফ্রন্টএন্ডে পাঠান
     cart = await Cart.findById(cart._id).populate('items.product', 'name slug imageGroups variants hasVariants');
-
-    console.log('✅ Cart saved successfully, total items:', cart.items.length);
-
+    console.log('Cart saved successfully, total items:', cart.items.length);
     res.status(200).json({ 
       success: true, 
       message: 'Product added to your cart successfully.',
       cart 
     });
-
   } catch (error) {
-    console.error("❌ Cart Controller Error:", error);
-    
-    // মঙ্গুজ ভ্যালিডেশন এরর হ্যান্ডলিং
+    console.error("Cart Controller Error:", error);
     if (error.name === 'ValidationError') {
       return res.status(400).json({ 
         success: false, 
         message: error.message 
       });
     }
-    
     next(error);
   }
 };
@@ -253,23 +259,19 @@ export const updateCartItem = async (req, res, next) => {
   // Debugging
   console.log('Update Cart Item ID:', req.params.itemId); 
   console.log('Requested Quantity:', quantity);
-    
   if (!req.user || !req.user.id) {
     return res.status(401).json({ 
       success: false, 
       message: 'Not authorized.' 
     });
   }
-
-  // ✅ Client side-e check kora holeo, server side-e confirm kora bhalo
   if (quantity < 1) { 
     return res.status(400).json({ 
       success: false, 
       message: 'Quantity must be at least 1. Use DELETE to remove item.' 
     });
   }
-  
-  try { // ✅ try block add kora holo
+  try {
     const cart = await Cart.findOne({ user: req.user.id });
     if (!cart) {
       return res.status(404).json({ 
@@ -277,8 +279,6 @@ export const updateCartItem = async (req, res, next) => {
         message: 'Cart not found' 
       });
     }
-
-    // ✅ item ID ব্যবহার করে সাবডকুমেন্ট খোঁজা
     const item = cart.items.id(req.params.itemId);
     if (!item) {
       return res.status(404).json({ 
@@ -286,28 +286,18 @@ export const updateCartItem = async (req, res, next) => {
         message: 'Cart item not found' 
       });
     }
-
     item.quantity = quantity;
-    await cart.save(); // ✅ save() call korar shomoy kono validation error hole catch block e jabe
-    
-    // ✅ Population সহ কার্ট আবার পাঠান
+    await cart.save(); 
     await cart.populate('items.product', 'name slug imageGroups variants hasVariants');
-
-    // ✅ Successful response
     res.status(200).json({ success: true, cart });
-    
-  } catch (error) { // ✅ catch block add kora holo
-    console.error("❌ Cart Controller Update Error:", error);
-    
-    // Mongoose validation error handle
+  } catch (error) { 
+    console.error("art Controller Update Error:", error);
     if (error.name === 'ValidationError') {
       return res.status(400).json({ 
         success: false, 
         message: error.message 
       });
     }
-    
-    // General server error
     next(error); 
   }
 };

@@ -1,6 +1,13 @@
-// models/cart.model.js
-
 import mongoose from 'mongoose';
+
+const cartVariantOptionSchema = new mongoose.Schema( 
+  {
+    name: { type: String, required: true, trim: true },
+    value: { type: String, required: true, trim: true },
+  },
+  { _id: false }
+);
+
 
 const cartItemSchema = new mongoose.Schema(
   {
@@ -9,10 +16,12 @@ const cartItemSchema = new mongoose.Schema(
       ref: 'Product',
       required: true,
     },
-    variant: {
-      name: String,
-      value: String,
-      sku: String,
+    variant: { 
+      variantId: mongoose.Schema.Types.ObjectId, 
+      options: [cartVariantOptionSchema], 
+      imageGroupName: { type: String, trim: true },
+      displayName: { type: String, trim: true },
+      sku: { type: String, trim: true },
     },
     quantity: {
       type: Number,
@@ -23,8 +32,10 @@ const cartItemSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    basePrice: Number,
+    discountPercentage: Number,
   },
-  { _id: true } // ✅ _id enable করা হয়েছে
+  { _id: true }
 );
 
 const cartSchema = new mongoose.Schema(
@@ -46,7 +57,6 @@ const cartSchema = new mongoose.Schema(
   }
 );
 
-// Pre-save hook to calculate total price
 cartSchema.pre('save', function (next) {
   let total = 0;
   this.items.forEach((item) => {
