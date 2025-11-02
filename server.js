@@ -28,6 +28,12 @@ import heroRoutes from "./routes/heroRoutes.js";
 import promotionRoutes from "./routes/promotionRoutes.js";
 import adminCartRoutes from "./routes/adminCartRoutes.js";
 
+import fs from 'fs';
+import path from 'path';
+
+console.log("📂 Models folder contents:", fs.readdirSync(path.join(process.cwd(), 'models')));
+
+
 
 // import adminRoutes from './routes/adminRoutes.js';
 
