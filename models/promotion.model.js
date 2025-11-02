@@ -1,3 +1,4 @@
+// models/promotion.model.js
 import mongoose from 'mongoose';
 
 const promotionSchema = new mongoose.Schema({
@@ -14,7 +15,7 @@ const promotionSchema = new mongoose.Schema({
   },
   targetUsers: {
     type: String,
-    enum: ['all', 'abandoned_cart_users', 'specific_users'],
+    enum: ['all', 'abandoned_cart_users', 'specific_users'], // 🔥 এই enum values
     default: 'abandoned_cart_users'
   },
   discountType: {

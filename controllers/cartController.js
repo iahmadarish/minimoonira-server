@@ -1,9 +1,14 @@
 import Cart from '../models/cart.model.js';
 import Product from '../models/product.model.js';
+import Campaign from '../models/campaign.model.js';
+import Promotion from '../models/promotion.model.js';
+
+
 
 // @desc    Get user cart
 // @route   GET /api/v1/cart
 // @access  Private
+
 export const getCart = async (req, res, next) => {
     
     // 1. অথেন্টিকেশন চেক
@@ -19,51 +24,81 @@ export const getCart = async (req, res, next) => {
         let cart = await Cart.findOne({ user: req.user.id })
             .populate({
                 path: 'items.product',
-                select: 'name slug imageGroups variants hasVariants price basePrice discountPercentage'
+                select: 'name slug imageGroups variants hasVariants price basePrice discountPercentage stockStatus isActive'
             });
 
         // কার্ট না থাকলে নতুন কার্ট তৈরি করা
         if (!cart) {
             const newCart = await Cart.create({ user: req.user.id, items: [] });
-            return res.status(200).json({ success: true, cart: newCart });
+            
+            // 🔥 নতুন কার্টের জন্য active campaigns চেক করুন
+            let activeCampaigns = [];
+            try {
+                const Campaign = (await import('../models/campaign.model.js')).default;
+                activeCampaigns = await Campaign.find({
+                    user: req.user.id,
+                    status: 'active',
+                    expiresAt: { $gt: new Date() }
+                }).populate('promotion').populate('cartItems.product');
+            } catch (campaignError) {
+                console.log('⚠️ Campaign model not available yet');
+            }
+            
+            return res.status(200).json({ 
+                success: true, 
+                cart: newCart,
+                activeCampaigns: activeCampaigns
+            });
         }
 
-        let isCartModified = false; // দাম/আইটেম পরিবর্তন হয়েছে কিনা ট্র্যাক করার জন্য
+        let isCartModified = false;
         const itemsToKeep = [];
         
         // 3. প্রতিটি আইটেম লুপ করে দাম এবং প্রোডাক্ট স্ট্যাটাস পরীক্ষা করা
         for (const item of cart.items) {
             const product = item.product;
             
-            // যদি প্রোডাক্ট ডাটাবেস থেকে মুছে ফেলা হয়ে থাকে
-            if (!product) {
+            // যদি প্রোডাক্ট ডাটাবেস থেকে মুছে ফেলা হয়ে থাকে বা inactive থাকে
+            if (!product || product.isActive === false) {
                 isCartModified = true;
-                // এই ক্ষেত্রে আইটেমটি বাদ দেওয়া হবে, তাই itemsToKeep তে যোগ করা হচ্ছে না।
+                console.log(`🗑️ Removing inactive/deleted product from cart: ${product?.name || 'Unknown Product'}`);
                 continue; 
             }
 
-            let livePrice = product.price; // ডিফল্টভাবে প্রোডাক্টের মূল দাম
+            // যদি প্রোডাক্ট out of stock থাকে
+            if (product.stockStatus === 'out_of_stock') {
+                isCartModified = true;
+                console.log(`📦 Removing out of stock product: ${product.name}`);
+                continue;
+            }
+
+            let livePrice = product.price;
             let currentItemPrice = item.priceAtPurchase;
             
             // ভেরিয়েন্ট (Variant) এর দাম খুঁজে বের করা
             if (product.hasVariants && item.variant?.sku) {
                 const liveVariant = product.variants.find(v => v.sku === item.variant.sku);
                 
-                // যদি ভেরিয়েন্ট খুঁজে পাওয়া যায়, তবে সেই ভেরিয়েন্টের দাম ব্যবহার করা
                 if (liveVariant) {
                     livePrice = liveVariant.price;
+                    
+                    // যদি ভেরিয়েন্ট out of stock থাকে
+                    if (liveVariant.stockStatus === 'out_of_stock') {
+                        isCartModified = true;
+                        console.log(`📦 Removing out of stock variant: ${product.name} - ${item.variant.displayName}`);
+                        continue;
+                    }
                 } else {
-                    // ভেরিয়েন্ট খুঁজে না পেলে (হয়তো ডিলিট হয়েছে বা SKU বদলেছে), আইটেমটি বাদ দেওয়া
+                    // ভেরিয়েন্ট খুঁজে না পেলে (হয়তো ডিলিট হয়েছে বা SKU বদলেছে)
                     isCartModified = true;
+                    console.log(`❌ Variant not found, removing: ${product.name} - ${item.variant.displayName}`);
                     continue; 
                 }
             }
             
             // 4. দামের তুলনা: যদি কার্টে সেভ করা দাম লাইভ দামের সাথে না মেলে
-            // .toFixed(2) ব্যবহার করা হয়েছে ফ্লোটিং পয়েন্ট তুলনা করার জটিলতা এড়াতে।
             if (currentItemPrice.toFixed(2) !== livePrice.toFixed(2)) {
-                
-                // দাম আপডেট করা
+                console.log(`💰 Price updated for ${product.name}: ${currentItemPrice} → ${livePrice}`);
                 item.priceAtPurchase = livePrice; 
                 isCartModified = true;
             }
@@ -74,24 +109,129 @@ export const getCart = async (req, res, next) => {
         
         // 5. যদি কোনো পরিবর্তন হয়, কার্ট আপডেট করে সেভ করা
         if (isCartModified) {
-            cart.items = itemsToKeep; // ডিলিট হওয়া আইটেম বা ইনভ্যালিড ভেরিয়েন্ট বাদ দেওয়া হলো
+            cart.items = itemsToKeep;
             
-            // মোট দাম পুনরায় গণনা করা (pre-save hook ব্যবহার করেও এটি করা যায়, তবে ম্যানুয়ালি সেট করা নিরাপদ)
+            // মোট দাম পুনরায় গণনা করা
             let newTotalPrice = cart.items.reduce((total, item) => total + (item.priceAtPurchase * item.quantity), 0);
             cart.totalPrice = newTotalPrice;
             
-            // ডাটাবেসে পরিবর্তনগুলো সংরক্ষণ করা
             await cart.save();
             
             // সেভ করার পর, আবার পপুলেট করে সঠিক স্ট্রাকচার নিশ্চিত করা
             await cart.populate({
                 path: 'items.product',
-                select: 'name slug imageGroups variants hasVariants price basePrice discountPercentage'
+                select: 'name slug imageGroups variants hasVariants price basePrice discountPercentage stockStatus isActive'
             });
         }
 
-        // 6. আপডেট হওয়া বা যাচাই করা কার্ট ফ্রন্টএন্ডে পাঠানো
-        res.status(200).json({ success: true, cart: cart });
+        // 🔥 6. ইউজারের একটিভ ক্যাম্পেইন গুলো ফেচ করুন
+        let activeCampaigns = [];
+        try {
+            const Campaign = (await import('../models/campaign.model.js')).default;
+            const Promotion = (await import('../models/promotion.model.js')).default;
+            
+            activeCampaigns = await Campaign.find({
+                user: req.user.id,
+                status: 'active',
+                expiresAt: { $gt: new Date() }
+            })
+            .populate('promotion')
+            .populate('cartItems.product', 'name slug imageGroups price');
+            
+            console.log(`🎁 Found ${activeCampaigns.length} active campaigns for user`);
+            
+        } catch (campaignError) {
+            console.log('⚠️ Campaign/Promotion models not available yet:', campaignError.message);
+        }
+
+        // 🔥 7. প্রমোশন এপ্লাই করার লজিক
+        let finalCart = cart.toObject();
+        let appliedPromotions = [];
+        let totalDiscount = 0;
+
+        if (activeCampaigns.length > 0) {
+            for (const campaign of activeCampaigns) {
+                if (campaign.promotion && campaign.promotion.isActive) {
+                    const promotion = campaign.promotion;
+                    
+                    // প্রমোশন ভ্যালিডিটি চেক
+                    const now = new Date();
+                    if (now < promotion.startDate || now > promotion.endDate) {
+                        continue;
+                    }
+
+                    // মিনিমাম কার্ট ভ্যালু চেক
+                    if (promotion.minimumCartValue && finalCart.totalPrice < promotion.minimumCartValue) {
+                        continue;
+                    }
+
+                    let campaignDiscount = 0;
+                    
+                    // প্রোমোশন টাইপ অনুযায়ী ডিস্কাউন্ট ক্যালকুলেট
+                    if (promotion.type === 'cart_discount') {
+                        // সম্পূর্ণ কার্টে ডিস্কাউন্ট
+                        if (promotion.discountType === 'percentage') {
+                            campaignDiscount = (finalCart.totalPrice * promotion.discountValue) / 100;
+                        } else {
+                            campaignDiscount = promotion.discountValue;
+                        }
+                    } else if (promotion.type === 'product_discount') {
+                        // স্পেসিফিক প্রোডাক্টে ডিস্কাউন্ট
+                        for (const item of finalCart.items) {
+                            if (promotion.applicableProducts && 
+                                promotion.applicableProducts.includes(item.product._id.toString())) {
+                                
+                                if (promotion.discountType === 'percentage') {
+                                    const itemDiscount = (item.priceAtPurchase * item.quantity * promotion.discountValue) / 100;
+                                    campaignDiscount += itemDiscount;
+                                    
+                                    // আইটেম লেভেলে ডিস্কাউন্ট প্রাইস সেট করুন
+                                    item.discountedPrice = item.priceAtPurchase - (item.priceAtPurchase * promotion.discountValue / 100);
+                                } else {
+                                    campaignDiscount += promotion.discountValue * item.quantity;
+                                    item.discountedPrice = item.priceAtPurchase - promotion.discountValue;
+                                }
+                            }
+                        }
+                    } else if (promotion.type === 'abandoned_cart') {
+                        // অ্যাবানডন্ড কার্ট প্রমোশন - সম্পূর্ণ কার্টে
+                        if (promotion.discountType === 'percentage') {
+                            campaignDiscount = (finalCart.totalPrice * promotion.discountValue) / 100;
+                        } else {
+                            campaignDiscount = promotion.discountValue;
+                        }
+                    }
+
+                    // ডিস্কাউন্ট অ্যাপ্লাই করা
+                    if (campaignDiscount > 0) {
+                        totalDiscount += campaignDiscount;
+                        appliedPromotions.push({
+                            campaignId: campaign._id,
+                            promotionName: promotion.name,
+                            discountValue: promotion.discountValue,
+                            discountType: promotion.discountType,
+                            discountAmount: campaignDiscount
+                        });
+                    }
+                }
+            }
+        }
+
+        // ফাইনাল প্রাইস ক্যালকুলেশন
+        const finalTotalPrice = Math.max(0, finalCart.totalPrice - totalDiscount);
+
+        // 8. আপডেট হওয়া বা যাচাই করা কার্ট ফ্রন্টএন্ডে পাঠানো
+        res.status(200).json({ 
+            success: true, 
+            cart: finalCart,
+            activeCampaigns: activeCampaigns,
+            appliedPromotions: appliedPromotions,
+            totalDiscount: totalDiscount,
+            finalTotalPrice: finalTotalPrice,
+            message: appliedPromotions.length > 0 ? 
+                `🎉 ${appliedPromotions.length} promotion(s) applied to your cart!` : 
+                'Cart loaded successfully'
+        });
         
     } catch (error) {
         console.error("❌ Cart Controller getCart Error:", error);

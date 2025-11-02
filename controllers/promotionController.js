@@ -110,3 +110,36 @@ export const getUserCampaigns = async (req, res, next) => {
     next(error);
   }
 };
+
+export const applyCampaignToCart = async (req, res, next) => {
+  try {
+    const { campaignId } = req.body;
+
+    const campaign = await Campaign.findOne({
+      _id: campaignId,
+      user: req.user.id,
+      status: 'active',
+      expiresAt: { $gt: new Date() }
+    }).populate('promotion');
+
+    if (!campaign) {
+      return res.status(404).json({
+        success: false,
+        message: 'Campaign not found or expired'
+      });
+    }
+
+    // ক্যাম্পেইন ব্যবহার করা হলে স্ট্যাটাস আপডেট করুন
+    campaign.status = 'used';
+    campaign.usedAt = new Date();
+    await campaign.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Campaign applied successfully',
+      campaign
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -25,6 +25,10 @@ import analyticsRoutes from './routes/analyticsRoutes.js';
 import reviewRoutes from "./routes/review.routes.js";
 import heroRoutes from "./routes/heroRoutes.js";
 
+import promotionRoutes from "./routes/promotionRoutes.js";
+import adminCartRoutes from "./routes/adminCartRoutes.js";
+
+
 // import adminRoutes from './routes/adminRoutes.js';
 
 // Load environment variables
@@ -100,6 +104,9 @@ app.use("/api/v1/reviews", reviewRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use(`/api/${API_VERSION}/hero`, heroContentRoutes);
 app.use(`/api/${API_VERSION}/hero`, heroRoutes);
+
+app.use(`/api/${API_VERSION}/promotions`, promotionRoutes);
+app.use('/api/v1/admin/cart-campaigns', adminCartRoutes);
 
 // web store CMS - Hero Content 
 
