@@ -1,7 +1,7 @@
 import Product from "../models/product.model.js";
 import mongoose from "mongoose"; 
 import { validationResult } from "express-validator";
-
+import DynamicSection from "../models/DynamicSection.model.js";
 
 // ################ first version of the products ################
 // export const createProduct = async (req, res) => {
@@ -1881,6 +1881,606 @@ export const updateStock = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error updating stock",
+      error: error.message
+    });
+  }
+};
+
+
+
+
+// ###################
+// Product Filtering by Dynamic Attributes start
+// ###################
+
+
+// Get products by dynamic attributes
+export const getProductsByAttributes = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 12,
+      search,
+      category,
+      minPrice,
+      maxPrice,
+      inStock,
+      onSale,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    // Attributes ফিল্টার - query parameters থেকে attributes পড়া
+    const attributesFilter = {};
+    Object.keys(req.query).forEach(key => {
+      if (key.startsWith('attr_')) {
+        const attributeKey = key.replace('attr_', '');
+        attributesFilter[`attributes.key`] = attributeKey;
+        attributesFilter[`attributes.value`] = req.query[key];
+      }
+    });
+
+    const limitInt = parseInt(limit);
+    const pageInt = parseInt(page);
+    const skip = (pageInt - 1) * limitInt;
+
+    // ১. ফিল্টার অবজেক্ট তৈরি
+    let filter = { isActive: true };
+
+    // Attributes ফিল্টার প্রয়োগ
+    if (Object.keys(attributesFilter).length > 0) {
+      filter['attributes'] = {
+        $elemMatch: {
+          key: attributesFilter[`attributes.key`],
+          value: attributesFilter[`attributes.value`]
+        }
+      };
+    }
+
+    // অন্যান্য ফিল্টার
+    if (category) {
+      filter.$or = [
+        { category: category },
+        { subCategory: category }
+      ];
+    }
+    
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) filter.price.$gte = parseFloat(minPrice);
+      if (maxPrice) filter.price.$lte = parseFloat(maxPrice);
+    }
+
+    if (inStock === 'true') {
+      filter.stock = { $gt: 0 };
+    }
+
+    if (onSale === 'true') {
+      const now = new Date();
+      filter.discountPercentage = { $gt: 0 };
+      filter.discountStart = { $lte: now };
+      filter.discountEnd = { $gte: now };
+    }
+
+    // ২. সার্চ অপটিমাইজেশন
+    let sortOptions = {};
+    if (sortBy && sortOrder) {
+      sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+    }
+
+    if (search) {
+      filter.$text = { $search: search };
+      sortOptions.score = { $meta: "textScore" };
+    }
+
+    // ৩. মোট প্রোডাক্ট সংখ্যা গণনা
+    const totalProducts = await Product.countDocuments(filter);
+    const totalPages = Math.ceil(totalProducts / limitInt);
+
+    // ৪. কোয়েরি চালানো এবং প্রোজেকশন
+    const products = await Product.find(filter)
+      .select('name slug price basePrice discountPercentage imageGroups averageRating numReviews stock hasVariants category subCategory attributes')
+      .populate({
+        path: "category",
+        select: 'name slug parentCategory',
+        populate: {
+          path: "parentCategory",
+          select: 'name slug parentCategory',
+          populate: { path: "parentCategory", select: 'name slug' }
+        }
+      })
+      .populate({
+        path: "subCategory",
+        select: 'name slug parentCategory',
+        populate: {
+          path: "parentCategory",
+          select: 'name slug parentCategory',
+          populate: { path: "parentCategory", select: 'name slug' }
+        }
+      })
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limitInt);
+
+    // ৫. রেসপন্স পাঠানো
+    res.status(200).json({
+      success: true,
+      products,
+      total: totalProducts,
+      totalPages: totalPages,
+      currentPage: pageInt,
+      limit: limitInt,
+      filter: Object.keys(attributesFilter).length > 0 ? attributesFilter : null
+    });
+
+  } catch (error) {
+    console.error("Error fetching products by attributes:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching products",
+      error: error.message
+    });
+  }
+};
+
+// Get available attribute keys and values for filtering
+export const getProductAttributes = async (req, res) => {
+  try {
+    const activeProducts = await Product.find({ isActive: true })
+      .select('attributes')
+      .lean();
+
+    const attributesMap = {};
+
+    activeProducts.forEach(product => {
+      if (product.attributes && Array.isArray(product.attributes)) {
+        product.attributes.forEach(attr => {
+          if (attr.key && attr.value) {
+            if (!attributesMap[attr.key]) {
+              attributesMap[attr.key] = new Set();
+            }
+            attributesMap[attr.key].add(attr.value);
+          }
+        });
+      }
+    });
+
+    // Convert Sets to Arrays
+    const attributes = {};
+    Object.keys(attributesMap).forEach(key => {
+      attributes[key] = Array.from(attributesMap[key]);
+    });
+
+    res.status(200).json({
+      success: true,
+      attributes,
+      totalAttributes: Object.keys(attributes).length
+    });
+
+  } catch (error) {
+    console.error("Error fetching product attributes:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching product attributes",
+      error: error.message
+    });
+  }
+};
+
+// Get products by multiple attributes (advanced filtering)
+export const getProductsByMultipleAttributes = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 12,
+      attributes = '{}' // JSON string হিসেবে attributes নিবে
+    } = req.query;
+
+    let attributesFilter;
+    try {
+      attributesFilter = JSON.parse(attributes);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid attributes format. Please provide valid JSON."
+      });
+    }
+
+    const limitInt = parseInt(limit);
+    const pageInt = parseInt(page);
+    const skip = (pageInt - 1) * limitInt;
+
+    // ফিল্টার অবজেক্ট তৈরি
+    let filter = { isActive: true };
+
+    // মাল্টিপল attributes ফিল্টার
+    if (attributesFilter && Object.keys(attributesFilter).length > 0) {
+      filter.$and = Object.keys(attributesFilter).map(key => ({
+        attributes: {
+          $elemMatch: {
+            key: key,
+            value: attributesFilter[key]
+          }
+        }
+      }));
+    }
+
+    // মোট প্রোডাক্ট সংখ্যা গণনা
+    const totalProducts = await Product.countDocuments(filter);
+    const totalPages = Math.ceil(totalProducts / limitInt);
+
+    // কোয়েরি চালানো
+    const products = await Product.find(filter)
+      .select('name slug price basePrice discountPercentage imageGroups averageRating numReviews stock hasVariants category subCategory attributes')
+      .populate({
+        path: "category",
+        select: 'name slug'
+      })
+      .populate({
+        path: "subCategory",
+        select: 'name slug'
+      })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitInt);
+
+    res.status(200).json({
+      success: true,
+      products,
+      total: totalProducts,
+      totalPages: totalPages,
+      currentPage: pageInt,
+      limit: limitInt,
+      appliedFilters: attributesFilter
+    });
+
+  } catch (error) {
+    console.error("Error fetching products by multiple attributes:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching products",
+      error: error.message
+    });
+  }
+};
+
+export const getProductsForDynamicSection = async (req, res) => {
+  try {
+    const { sectionId } = req.params;
+    
+    // Find the section
+    const section = await DynamicSection.findById(sectionId);
+    
+    if (!section) {
+      return res.status(404).json({
+        success: false,
+        message: "Section not found"
+      });
+    }
+
+    if (!section.isActive) {
+      return res.status(200).json({
+        success: true,
+        section: {
+          _id: section._id,
+          title: section.title,
+          description: section.description,
+          isActive: false
+        },
+        products: []
+      });
+    }
+
+    // Build filter based on section configuration
+    let filter = { 
+      isActive: true 
+    };
+
+    // Attribute based filtering
+    if (section.sectionType === "attribute-based") {
+      filter['attributes'] = {
+        $elemMatch: {
+          key: section.attributeKey,
+          value: section.attributeValue
+        }
+      };
+    }
+
+    // Sort options
+    const sortOptions = {};
+    sortOptions[section.sortBy] = section.sortOrder === "asc" ? 1 : -1;
+
+    // Execute query
+    const products = await Product.find(filter)
+      .select('name slug price basePrice discountPercentage imageGroups averageRating numReviews stock hasVariants')
+      .populate("category", "name slug")
+      .populate("subCategory", "name slug")
+      .sort(sortOptions)
+      .limit(section.productLimit);
+
+    res.status(200).json({
+      success: true,
+      section: {
+        _id: section._id,
+        title: section.title,
+        description: section.description,
+        backgroundColor: section.backgroundColor,
+        textColor: section.textColor,
+        productLimit: section.productLimit
+      },
+      products,
+      totalProducts: products.length
+    });
+
+  } catch (error) {
+    console.error("Error fetching dynamic section products:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching section products",
+      error: error.message
+    });
+  }
+};
+
+// Get all active sections for homepage
+export const getHomepageSections = async (req, res) => {
+  try {
+    console.log('Fetching homepage sections...');
+    
+    const sections = await DynamicSection.find({
+      isActive: true,
+      showInHomepage: true
+    })
+    .sort({ displayOrder: 1, createdAt: -1 })
+    .select('title description attributeKey attributeValue productLimit backgroundColor textColor sectionType sortBy sortOrder isActive displayOrder showInHomepage') // ✅ isActive যোগ করুন
+    .lean();
+
+    console.log('Found sections:', sections.length);
+
+    // Get products for each section
+    const sectionsWithProducts = await Promise.all(
+      sections.map(async (section) => {
+        let filter = { isActive: true };
+        
+        console.log(`Processing section: ${section.title} - ${section.attributeKey}=${section.attributeValue}, Active: ${section.isActive}`);
+        
+        if (section.sectionType === "attribute-based") {
+          filter['attributes'] = {
+            $elemMatch: {
+              key: section.attributeKey,
+              value: section.attributeValue
+            }
+          };
+        }
+
+        const sortOptions = {};
+        sortOptions[section.sortBy || 'createdAt'] = (section.sortOrder || 'desc') === "asc" ? 1 : -1;
+
+        const products = await Product.find(filter)
+          .select('name slug price basePrice discountPercentage imageGroups averageRating numReviews stock hasVariants')
+          .populate("category", "name slug")
+          .populate("subCategory", "name slug")
+          .sort(sortOptions)
+          .limit(section.productLimit || 8)
+          .lean();
+
+        console.log(`Found ${products.length} products for section: ${section.title}`);
+
+        return {
+          ...section,
+          products,
+          totalProducts: products.length,
+          isActive: section.isActive !== undefined ? section.isActive : true // ✅ ডিফল্ট ভ্যালু
+        };
+      })
+    );
+
+    console.log('Sending response with sections:', sectionsWithProducts.map(s => ({
+      title: s.title,
+      isActive: s.isActive,
+      products: s.products.length
+    })));
+
+    res.status(200).json({
+      success: true,
+      sections: sectionsWithProducts
+    });
+
+  } catch (error) {
+    console.error("Error fetching homepage sections:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching homepage sections",
+      error: error.message
+    });
+  }
+};
+
+// CRUD operations for dynamic sections
+export const createDynamicSection = async (req, res) => {
+  try {
+    const {
+      title,
+      description,
+      attributeKey,
+      attributeValue,
+      productLimit = 8,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      displayOrder = 0,
+      backgroundColor = "#ffffff",
+      textColor = "#000000"
+    } = req.body;
+
+    // Check if similar section already exists
+    const existingSection = await DynamicSection.findOne({
+      attributeKey,
+      attributeValue,
+      isActive: true
+    });
+
+    if (existingSection) {
+      return res.status(400).json({
+        success: false,
+        message: "A section with this attribute already exists"
+      });
+    }
+
+    const section = new DynamicSection({
+      title,
+      description,
+      attributeKey,
+      attributeValue,
+      productLimit,
+      sortBy,
+      sortOrder,
+      displayOrder,
+      backgroundColor,
+      textColor,
+      createdBy: req.user._id
+    });
+
+    const savedSection = await section.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Dynamic section created successfully",
+      section: savedSection
+    });
+
+  } catch (error) {
+    console.error("Error creating dynamic section:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error creating dynamic section",
+      error: error.message
+    });
+  }
+};
+
+export const updateDynamicSection = async (req, res) => {
+  try {
+    const { sectionId } = req.params;
+
+    const section = await DynamicSection.findByIdAndUpdate(
+      sectionId,
+      { ...req.body },
+      { new: true, runValidators: true }
+    );
+
+    if (!section) {
+      return res.status(404).json({
+        success: false,
+        message: "Section not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Section updated successfully",
+      section
+    });
+
+  } catch (error) {
+    console.error("Error updating dynamic section:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error updating dynamic section",
+      error: error.message
+    });
+  }
+};
+
+export const deleteDynamicSection = async (req, res) => {
+  try {
+    const { sectionId } = req.params;
+
+    const section = await DynamicSection.findByIdAndDelete(sectionId);
+
+    if (!section) {
+      return res.status(404).json({
+        success: false,
+        message: "Section not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Section deleted successfully"
+    });
+
+  } catch (error) {
+    console.error("Error deleting dynamic section:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error deleting dynamic section",
+      error: error.message
+    });
+  }
+};
+
+export const getAllDynamicSections = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, isActive } = req.query;
+
+    const filter = {};
+    if (isActive !== undefined) {
+      filter.isActive = isActive === "true";
+    }
+
+    const sections = await DynamicSection.find(filter)
+      .populate("createdBy", "name email")
+      .sort({ displayOrder: 1, createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await DynamicSection.countDocuments(filter);
+
+    res.status(200).json({
+      success: true,
+      sections,
+      totalPages: Math.ceil(total / limit),
+      currentPage: Number(page),
+      total
+    });
+
+  } catch (error) {
+    console.error("Error fetching dynamic sections:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching dynamic sections",
+      error: error.message
+    });
+  }
+};
+
+export const toggleSectionStatus = async (req, res) => {
+  try {
+    const { sectionId } = req.params;
+
+    const section = await DynamicSection.findById(sectionId);
+    
+    if (!section) {
+      return res.status(404).json({
+        success: false,
+        message: "Section not found"
+      });
+    }
+
+    section.isActive = !section.isActive;
+    await section.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Section ${section.isActive ? 'activated' : 'deactivated'} successfully`,
+      section
+    });
+
+  } catch (error) {
+    console.error("Error toggling section status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error toggling section status",
       error: error.message
     });
   }
