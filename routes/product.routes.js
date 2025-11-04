@@ -124,7 +124,8 @@ import {
   updateDynamicSection,
   deleteDynamicSection,
   getAllDynamicSections,
-  toggleSectionStatus
+  toggleSectionStatus,
+  searchProductsForAdmin
 } from "../controllers/product.controller.js";
 
 import { body } from "express-validator";
@@ -168,10 +169,12 @@ router.get("/admin/dashboard", getAdminProducts);
 
 // ✅ Dynamic Sections Management (Admin only)
 router.get("/admin/sections", protect, admin, getAllDynamicSections);
+router.get("/admin/search", protect, admin, searchProductsForAdmin);
 router.post("/admin/sections", protect, admin, sectionValidationRules, createDynamicSection);
 router.put("/admin/sections/:sectionId", protect, admin, updateDynamicSection);
 router.delete("/admin/sections/:sectionId", protect, admin, deleteDynamicSection);
 router.patch("/admin/sections/:sectionId/toggle", protect, admin, toggleSectionStatus);
+
 
 // Existing routes
 router.post("/", protect, admin, productValidationRules, createProduct);

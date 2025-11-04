@@ -72,6 +72,8 @@ export const createOrder = async (req, res, next) => {
       paymentMethod,
       shippingPrice,
       taxPrice = 0,
+      couponCode, 
+      discountAmount = 0,
       isGuest = false,
       guestEmail,
       guestItems,
@@ -172,14 +174,19 @@ export const createOrder = async (req, res, next) => {
     }
 
     // --- ৩. প্রাইস ক্যালকুলেশন ---
-    const itemsPrice = finalOrderItems.reduce((acc, item) => {
+const itemsPrice = finalOrderItems.reduce((acc, item) => {
       return acc + (item.price * item.quantity);
     }, 0);
 
-    const finalShippingPrice = parseFloat(shippingPrice) || 0;
-    const finalTaxPrice = parseFloat(taxPrice) || 0;
+    const finalShippingPrice = parseFloat(shippingPrice) || 0; //
+    const finalTaxPrice = parseFloat(taxPrice) || 0; //
+    const finalDiscountAmount = parseFloat(discountAmount) || 0;
     
-    const totalPrice = itemsPrice + finalShippingPrice + finalTaxPrice;
+    let totalPrice = itemsPrice + finalShippingPrice + finalTaxPrice - finalDiscountAmount;
+
+    if (totalPrice < 0) {
+        totalPrice = 0;
+    }
 
     // --- ৪. নতুন অর্ডার তৈরি করুন ---
     const newOrder = new Order({
@@ -201,6 +208,8 @@ export const createOrder = async (req, res, next) => {
       paymentMethod,
       shippingPrice: finalShippingPrice,
       taxPrice: finalTaxPrice,
+      couponCode: couponCode || undefined, 
+      discountAmount: finalDiscountAmount,
       totalPrice,
       orderStatus: 'Pending',
       paymentStatus: 'Pending'
@@ -738,6 +747,117 @@ export const updatePaymentStatus = async (req, res, next) => {
   }
 };
 
+export const updateOrder = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { orderItems, shippingAddress, shippingPrice, taxPrice, note } = req.body;
+    const orderId = req.params.id;
+
+    // ১. অর্ডার খুঁজে আনুন
+    const order = await Order.findById(orderId).session(session);
+
+    if (!order) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    // ২. আগের আইটেমগুলোর স্টক পুনরুদ্ধার (Rollback Stock for Old Items)
+    // শুধুমাত্র যদি orderItems পরিবর্তন হয় তবেই স্টক আপডেট হবে।
+    let itemsTotal = 0;
+    
+    if (orderItems && Array.isArray(orderItems)) {
+        // নতুন আইটেমগুলো অর্ডার ফরম্যাটে তৈরি করুন এবং আইটেম টোটাল গণনা করুন
+        const newOrderItems = orderItems.map(item => ({
+            ...item,
+            quantity: parseInt(item.quantity) || 0,
+            price: parseFloat(item.price) || 0,
+            product: item.product._id || item.product, // productId ব্যবহার করুন
+        }));
+        
+        // --- স্টক সামঞ্জস্য লজিক (Stock Adjustment Logic) ---
+        
+        // A. পুরানো আইটেমগুলোর স্টক ফিরিয়ে আনুন (Stock 'increase' for old items)
+        await updateProductStock(order.orderItems, 'increase', session); 
+        
+        // B. নতুন আইটেমগুলো সেভ করুন
+        order.orderItems = newOrderItems;
+        
+        // C. নতুন আইটেমগুলোর জন্য স্টক কমিয়ে দিন (Stock 'decrease' for new items)
+        await updateProductStock(newOrderItems, 'decrease', session); 
+
+        // নতুন itemsTotal গণনা
+        itemsTotal = newOrderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    } else {
+        // orderItems পরিবর্তন না হলে, পুরাতন itemsTotal গণনা করুন
+        itemsTotal = order.orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    }
+
+
+    // ৩. অন্যান্য ফিল্ড আপডেট
+    if (shippingAddress) {
+      order.shippingAddress = {
+        ...order.shippingAddress,
+        ...shippingAddress,
+      };
+    }
+
+    if (shippingPrice !== undefined) {
+      order.shippingPrice = parseFloat(shippingPrice) || 0;
+    }
+    
+    if (taxPrice !== undefined) {
+      order.taxPrice = parseFloat(taxPrice) || 0;
+    }
+
+    // ৪. মোট মূল্য পুণরায় গণনা (Recalculate Total Price)
+    order.totalPrice = itemsTotal + order.shippingPrice + order.taxPrice;
+
+    // ৫. স্ট্যাটাস হিস্টোরি যোগ করুন
+    order.statusHistory.push({
+      status: order.orderStatus,
+      note: note || 'Order details updated by admin',
+      updatedBy: req.user.id,
+      updatedAt: new Date()
+    });
+
+    // ৬. সেভ করুন এবং ট্রানজেকশন কমিট করুন
+    await order.save({ session, runValidators: true });
+    await session.commitTransaction();
+
+    // ৭. রেসপন্সের জন্য populate করুন
+    const updatedOrder = await Order.findById(orderId)
+      .populate('user', 'name email')
+      .populate('statusHistory.updatedBy', 'name');
+
+    res.status(200).json({
+      success: true,
+      message: 'Order updated successfully',
+      order: updatedOrder
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('❌ Order update error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors
+      });
+    }
+
+    return res.status(500).json({ success: false, message: 'Server error during order update' });
+  } finally {
+    session.endSession();
+  }
+};
+
+
+
 // @desc    Add admin note to order
 // @route   POST /api/v1/admin/orders/:id/notes
 // @access  Private/Admin
@@ -848,6 +968,8 @@ export const updateOrderDetails = async (req, res, next) => {
       orderItems,
       shippingPrice,
       taxPrice,
+      couponCode, 
+      discountAmount,
       note
     } = req.body;
 
@@ -878,6 +1000,8 @@ export const updateOrderDetails = async (req, res, next) => {
     }
 
     console.log('✅ Order found:', order.orderNumber);
+
+    
 
     // Update shipping address
     if (shippingAddress) {
@@ -913,12 +1037,22 @@ export const updateOrderDetails = async (req, res, next) => {
       console.log('💰 Tax price updated:', order.taxPrice);
     }
 
+
+    if (discountAmount !== undefined) {
+      order.discountAmount = parseFloat(discountAmount) || 0;
+      console.log('💰 Discount amount updated:', order.discountAmount);
+    }
+    if (couponCode !== undefined) {
+      order.couponCode = couponCode || undefined;
+      console.log('🏷️ Coupon code updated:', order.couponCode);
+    }
+
     // Recalculate total price
     const itemsTotal = order.orderItems.reduce((sum, item) => {
       return sum + (item.price * item.quantity);
     }, 0);
     
-    order.totalPrice = itemsTotal + order.shippingPrice + order.taxPrice;
+   order.totalPrice = itemsTotal + order.shippingPrice + order.taxPrice - (order.discountAmount || 0);
     console.log('🧮 Total price recalculated:', order.totalPrice);
 
     // Add to status history

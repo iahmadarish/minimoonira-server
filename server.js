@@ -27,7 +27,7 @@ import heroRoutes from "./routes/heroRoutes.js";
 
 import promotionRoutes from "./routes/promotionRoutes.js";
 import adminCartRoutes from "./routes/adminCartRoutes.js";
-
+import couponRoutes from './routes/couponRoutes.js';
 
 
 // import adminRoutes from './routes/adminRoutes.js';
@@ -108,6 +108,7 @@ app.use(`/api/${API_VERSION}/hero`, heroRoutes);
 
 app.use(`/api/${API_VERSION}/promotions`, promotionRoutes);
 app.use('/api/v1/admin/cart-campaigns', adminCartRoutes);
+app.use('/api/v1/coupons', couponRoutes);
 
 // web store CMS - Hero Content 
 

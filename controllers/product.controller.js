@@ -2485,3 +2485,24 @@ export const toggleSectionStatus = async (req, res) => {
     });
   }
 };
+
+export const searchProductsForAdmin = async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.length < 2) {
+    return res.status(200).json({ success: true, products: [] });
+  }
+  try {
+    const products = await Product.find({
+      $or: [
+        { name: { $regex: q, $options: 'i' } },
+        { sku: { $regex: q, $options: 'i' } },
+      ],
+    })
+    .select('_id name basePrice price variants hasVariants imageGroups mainImage sku')
+    .limit(20);
+    
+    res.status(200).json({ success: true, products });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error during product search' });
+  }
+};
