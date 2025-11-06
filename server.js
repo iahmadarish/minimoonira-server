@@ -60,7 +60,7 @@ connectDB();
 // ===== Security Middlewares =====
 app.use(helmet());
 
-const allowedOrigins = ['https://minimoonira.vercel.app', 'http://localhost:5173', 'http://localhost:5174', 'https://sandbox.sslcommerz.com','https://securepay.sslcommerz.com', 'https://conqueric.com', 'https://conqueric.com/ecommerce' ];
+const allowedOrigins = ['https://minimoonira.vercel.app', 'http://localhost:5173', 'http://localhost:5174', 'https://sandbox.sslcommerz.com','https://securepay.sslcommerz.com', 'https://conqueric.com', 'http://conqueric.com' ];
 
 app.use(cors({
   origin: function (origin, callback) {
