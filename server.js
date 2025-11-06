@@ -29,7 +29,7 @@ import promotionRoutes from "./routes/promotionRoutes.js";
 import adminCartRoutes from "./routes/adminCartRoutes.js";
 import couponRoutes from './routes/couponRoutes.js';
 
-import navbarRoutes from './routes/navbar.js';
+import navbarRoutes from './routes/navbarRoutes.js';
 
 
 // import adminRoutes from './routes/adminRoutes.js';
