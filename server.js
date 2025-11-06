@@ -106,12 +106,13 @@ app.use('/api/v1/admin/analytics', analyticsRoutes);
 app.use("/api/v1/reviews", reviewRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use(`/api/${API_VERSION}/hero`, heroContentRoutes);
-app.use(`/api/${API_VERSION}/hero`, heroRoutes);
-
+app.use(`/api/${API_VERSION}/hero`, heroRoutes);  
+ 
 app.use(`/api/${API_VERSION}/promotions`, promotionRoutes);
+app.use(`/api/${API_VERSION}/navbar`, navbarRoutes);
 app.use('/api/v1/admin/cart-campaigns', adminCartRoutes);
 app.use('/api/v1/coupons', couponRoutes);
-app.use('/api/v1/navbar', navbarRoutes);
+// app.use('/api/v1/navbar', navbarRoutes);
 // web store CMS - Hero Content 
 
 // app.use('/api/v1/admin', adminRoutes);
