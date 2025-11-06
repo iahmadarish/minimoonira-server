@@ -551,7 +551,7 @@ export const getCart = async (req, res, next) => {
             
             // 4. দামের তুলনা: যদি কার্টে সেভ করা দাম লাইভ দামের সাথে না মেলে
             // দুটি মানই 0 দিয়ে সুরক্ষিত করা হয়েছে, যাতে toFixed() কাজ করে।
-            if (currentItemPrice.toFixed(2) !== livePrice.toFixed(2)) {
+            if ((currentItemPrice ?? 0).toFixed(2) !== (livePrice ?? 0).toFixed(2)) {
                 console.log(`💰 Price updated for ${product.name}: ${currentItemPrice} → ${livePrice}`);
                 item.priceAtPurchase = livePrice; 
                 isCartModified = true;
