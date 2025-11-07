@@ -60,21 +60,16 @@ connectDB();
 // ===== Security Middlewares =====
 app.use(helmet());
 
-const allowedOrigins = ['https://minimoonira.vercel.app', 'http://localhost:5173', 'http://localhost:5174', 'https://sandbox.sslcommerz.com','https://securepay.sslcommerz.com', 'https://conqueric.com', 'http://conqueric.com' ];
+const allowedOrigins = ['https://minimoonira.vercel.app', 'http://localhost:5173', 'http://localhost:5174', 'https://sandbox.sslcommerz.com','https://securepay.sslcommerz.com', 'https://conqueric.com',];
 
 app.use(cors({
   origin: function (origin, callback) {
-    
-    // 🚀 সমাধান: যদি Origin 'null' হয় (পেমেন্ট গেটওয়ে বা IPN এর ক্ষেত্রে ঘটে), তবে অনুমতি দাও
     if (!origin || origin === 'null') {
       return callback(null, true);
     } 
-    
-    // যদি OriginallowedOrigins এ থাকে, তবে অনুমতি দাও
-    if (allowedOrigins.indexOf(origin) !== -1) {
+        if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      // Log the blocked origin for debugging
       console.log(`CORS Error: Blocked origin ${origin}`); 
       callback(new Error('Not allowed by CORS'));
     }
