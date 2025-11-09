@@ -32,34 +32,79 @@ export const getNavbarConfig = async (req, res) => {
 // Create or update navbar configuration
 export const updateNavbarConfig = async (req, res) => {
   try {
+    console.log('📦 Request Body:', JSON.stringify(req.body, null, 2));
+    
     const { logo, logoUrl, items, cartIcon, searchIcon, userIcon, wishlistIcon } = req.body;
 
     let config = await NavbarConfig.findOne({ isActive: true });
+    console.log('🔍 Found existing config:', config ? 'Yes' : 'No');
+
+    // Process items - generate paths based on type
+    let processedItems = items;
+    if (items && Array.isArray(items)) {
+      processedItems = await Promise.all(items.map(async (item) => {
+        let cleanItem = { ...item };
+        
+        // Remove custom _id for new items to avoid ObjectId casting issues
+        if (item._id && typeof item._id === 'string' && item._id.startsWith('item-')) {
+          const { _id, ...rest } = item;
+          cleanItem = rest;
+        }
+
+        // Generate path based on item type
+        if (cleanItem.type === 'category' && cleanItem.category && !cleanItem.path) {
+          // For categories, create path like /category/slug
+          try {
+            const categoryDoc = await Category.findById(cleanItem.category).select('slug');
+            if (categoryDoc) {
+              cleanItem.path = `/category/${categoryDoc.slug}`;
+            } else {
+              cleanItem.path = '/shop'; // fallback
+            }
+          } catch (error) {
+            console.error('Error fetching category:', error);
+            cleanItem.path = '/shop'; // fallback
+          }
+        } else if (cleanItem.type === 'custom' && cleanItem.customUrl) {
+          cleanItem.path = cleanItem.customUrl;
+        }
+        // For 'link' type, use the provided path directly
+
+        return cleanItem;
+      }));
+    }
 
     if (config) {
       // Update existing config
-      config.logo = logo || config.logo;
-      config.logoUrl = logoUrl || config.logoUrl;
-      config.items = items || config.items;
-      config.cartIcon = cartIcon !== undefined ? cartIcon : config.cartIcon;
-      config.searchIcon = searchIcon !== undefined ? searchIcon : config.searchIcon;
-      config.userIcon = userIcon !== undefined ? userIcon : config.userIcon;
-      config.wishlistIcon = wishlistIcon !== undefined ? wishlistIcon : config.wishlistIcon;
+      if (logo) config.logo = logo;
+      if (logoUrl) config.logoUrl = logoUrl;
+      if (processedItems) config.items = processedItems;
+      if (cartIcon !== undefined) config.cartIcon = cartIcon;
+      if (searchIcon !== undefined) config.searchIcon = searchIcon;
+      if (userIcon !== undefined) config.userIcon = userIcon;
+      if (wishlistIcon !== undefined) config.wishlistIcon = wishlistIcon;
     } else {
       // Create new config
       config = new NavbarConfig({
-        logo,
-        logoUrl,
-        items,
-        cartIcon,
-        searchIcon,
-        userIcon,
-        wishlistIcon
+        logo: logo || {
+          url: "https://static.toiimg.com/thumb/resizemode-4,width-1280,height-720,msid-106616097/106616097.jpg",
+          public_id: ""
+        },
+        logoUrl: logoUrl || "/",
+        items: processedItems || [],
+        cartIcon: cartIcon !== undefined ? cartIcon : true,
+        searchIcon: searchIcon !== undefined ? searchIcon : true,
+        userIcon: userIcon !== undefined ? userIcon : true,
+        wishlistIcon: wishlistIcon !== undefined ? wishlistIcon : true
       });
     }
 
+    console.log('💾 Saving config...');
     await config.save();
+    console.log('✅ Config saved successfully');
+    
     await config.populate('items.category', 'name slug');
+    console.log('✅ Population completed');
 
     res.json({
       success: true,
@@ -67,9 +112,24 @@ export const updateNavbarConfig = async (req, res) => {
       data: config
     });
   } catch (error) {
+    console.error('❌ Error in updateNavbarConfig:', error);
+    console.error('📋 Error details:', {
+      name: error.name,
+      message: error.message
+    });
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(e => e.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation Error',
+        errors: errors
+      });
+    }
+    
     res.status(500).json({
       success: false,
-      message: error.message
+      message: 'Internal server error: ' + error.message
     });
   }
 };

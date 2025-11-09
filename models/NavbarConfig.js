@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 
 const navbarItemSchema = new mongoose.Schema({
+  _id: {
+    type: String,
+    default: () => `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  },
   name: {
     type: String,
     required: true,
@@ -23,7 +27,7 @@ const navbarItemSchema = new mongoose.Schema({
   },
   path: {
     type: String,
-    required: true
+    default: ''
   },
   order: {
     type: Number,
@@ -73,6 +77,16 @@ const navbarConfigSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true
+});
+
+
+navbarItemSchema.pre('save', function(next) {
+  if (this.type === 'category' && this.category && !this.path) {
+    this.path = `/category/${this.category}`;
+  } else if (this.type === 'custom' && this.customUrl) {
+    this.path = this.customUrl;
+  }
+  next();
 });
 
 const NavbarConfig = mongoose.model('NavbarConfig', navbarConfigSchema);
