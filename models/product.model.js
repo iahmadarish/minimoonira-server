@@ -299,7 +299,7 @@ productSchema.index({ price: 1, isActive: 1 });
 productSchema.index({ isFeatured: 1, isActive: 1 });
 productSchema.index({ slug: 1 });
 productSchema.index({ sku: 1 });
-
+productSchema.index({ createdAt: -1 });
 // Virtual for computed fields
 productSchema.virtual('discountAmount').get(function() {
   if (this.discountPercentage > 0) {
