@@ -20,8 +20,8 @@ const storage = new CloudinaryStorage({
     folder: 'ecommerce-products',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
     transformation: [
-      { width: 800, height: 800, crop: 'limit', quality: 'auto' }
-    ],
+  { width: 1600, height: 1600, crop: 'limit', quality: 'auto' }
+],
     public_id: (req, file) => {
       return `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
     }

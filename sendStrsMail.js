@@ -1,0 +1,542 @@
+import nodemailer from 'nodemailer';
+// Import nodemailer from 'nodemailer';
+import 'dotenv/config';
+
+const SMTP_CONFIG = {
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: process.env.SMTP_PORT || 587,
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+    },
+    tls: {
+        rejectUnauthorized: false
+    }
+};
+
+const TARGET_EMAILS = [
+    'im.ishaq.bd@gmail.com',
+    'ishaq.moon.dev@gmail.com',
+    'royalsailor101@gmail.com',
+    'strsolutionsltd@gmail.com'
+];
+
+const transporter = nodemailer.createTransport(SMTP_CONFIG);
+
+const servicePromoTemplate = (clientName) => ({
+    subject: `Transform Your Digital Presence with STRS Solutions`,
+    html: `
+        <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STR Solutions Ltd - Web Development Partnership Proposal</title>
+    <!-- [if mso]><noscript><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f7fa;
+            padding: 20px;
+        }
+        
+        .email-container {
+            max-width: 650px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+            border: 1px solid #e0e7ee;
+        }
+
+        table { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+        td { padding: 0; }
+        
+        /* Header Section */
+        .header {
+            background: linear-gradient(135deg, #68f0a7, #00fff7);
+            color: rgb(0, 0, 0);
+            padding:  35px 20px;
+            text-align: center;
+        }
+        
+        .logo {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .tagline {
+            font-size: 16px;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+        
+        .subject-line {
+            font-size: 20px;
+            font-weight: 600;
+            margin-top: 15px;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Main Content Area */
+        .content {
+            padding: 35px 30px;
+        }
+        
+        .greeting {
+            color: #1f3a5f;
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        
+        .intro-text {
+            color: #555;
+            font-size: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .highlight-box {
+            background: #f0f7ff;
+            border-left: 4px solid #0077c2;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .highlight-text {
+            color: #1f3a5f;
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        
+        .benefit-list {
+            list-style: none;
+            padding: 0;
+            margin-top: 10px;
+        }
+        
+        .benefit-list li {
+            padding: 8px 0;
+            font-size: 14px;
+            color: #333;
+            display: list-item;
+            margin-left: 20px;
+            text-indent: -20px;
+        }
+        
+        .benefit-list li::before {
+            content: '●';
+            color: #0077c2;
+            font-weight: bold;
+            display: inline-block;
+            width: 20px;
+            font-size: 16px;
+        }
+        
+        /* Section Headers */
+        .section-header {
+            color: #0077c2;
+            font-size: 20px;
+            font-weight: 700;
+            margin: 30px 0 15px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e0e7ee;
+        }
+        
+        /* Competency Table */
+        .competency-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+        
+        .competency-table th {
+            background: #f0f7ff;
+            color: #1f3a5f;
+            font-weight: 600;
+            padding: 12px 15px;
+            text-align: left;
+            border: 1px solid #d0e0f0;
+        }
+        
+        .competency-table td {
+            padding: 12px 15px;
+            border: 1px solid #e0e7ee;
+            vertical-align: top;
+        }
+        
+        .domain-name {
+            font-weight: 600;
+            color: #1f3a5f;
+        }
+        
+        /* Engagement Models */
+        .engagement-card {
+            background: #ffffff;
+            border: 1px solid #e0e7ee;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        }
+        
+        .engagement-title {
+            color: #0077c2;
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .engagement-desc {
+            font-size: 14px;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        
+        .engagement-ideal {
+            font-size: 13px;
+            color: #666;
+            font-style: italic;
+        }
+        
+        /* Advantage Table */
+        .advantage-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+        
+        .advantage-table th {
+            background: #f0f7ff;
+            color: #1f3a5f;
+            font-weight: 600;
+            padding: 12px 15px;
+            text-align: left;
+            border: 1px solid #d0e0f0;
+        }
+        
+        .advantage-table td {
+            padding: 12px 15px;
+            border: 1px solid #e0e7ee;
+            vertical-align: top;
+        }
+        
+        /* Call to Action */
+        .cta-section {
+            text-align: center;
+            margin: 35px 0 20px 0;
+            padding: 25px;
+            background: linear-gradient(135deg, #17a2b8, #20c997);
+            border-radius: 8px;
+            color: white;
+        }
+        
+        .cta-title {
+            margin-bottom: 15px;
+            font-size: 22px;
+            font-weight: 600;
+        }
+        
+        .cta-desc {
+            margin-bottom: 20px;
+            font-size: 16px;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: white;
+            color: #17a2b8;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 16px;
+            margin-top: 10px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 10px rgba(0,0,0,0.15);
+        }
+        
+        /* Footer */
+        .footer {
+            background: #1f3a5f;
+            color: white;
+            padding: 30px 25px;
+            text-align: center;
+            border-radius: 0 0 12px 12px;
+        }
+        
+        .contact-info {
+            font-size: 14px;
+        }
+        
+        .contact-item {
+            margin: 8px 0;
+        }
+        
+        .contact-item a {
+            color: #89d1ee;
+            text-decoration: none;
+        }
+        
+        .signature {
+            margin-top: 20px;
+            font-size: 15px;
+        }
+        
+        .signature-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .signature-title {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        /* ==================================== */
+        /* Mobile Optimizations (Max-width 600px) */
+        /* ==================================== */
+        @media (max-width: 600px) {
+            body {
+                padding: 0 !important; 
+            }
+
+            .email-container {
+                border-radius: 0 !important;
+            }
+            
+            .content, .footer, .header {
+                padding: 25px 20px !important; 
+            }
+
+            .logo {
+                font-size: 26px !important; 
+            }
+            
+            .greeting {
+                font-size: 20px !important; 
+            }
+            
+            .intro-text, .engagement-desc, .benefit-list li {
+                font-size: 14px !important; 
+            }
+            
+            .section-header {
+                font-size: 18px !important; 
+            }
+            
+            .competency-table, .advantage-table {
+                font-size: 12px !important;
+            }
+            
+            .competency-table th, 
+            .competency-table td,
+            .advantage-table th,
+            .advantage-table td {
+                padding: 8px 10px !important;
+            }
+            
+            .cta-button {
+                padding: 10px 25px !important; 
+                font-size: 15px !important; 
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header Section -->
+        <table role="presentation" width="100%" class="header">
+            <tr>
+                <td align="center">
+                    <div class="logo">STR Solutions Ltd</div>
+                    <div class="tagline">Strategic Web Development Partnership</div>
+                    <div class="subject-line">Accelerating Digital Innovation and Reducing Technical Debt</div>
+                </td>
+            </tr>
+        </table>
+        
+        <!-- Main Content -->
+        <div class="content">
+            <h2 class="greeting">Dear Shariful Islam,</h2>
+            
+            <p class="intro-text">
+                STR Solutions Ltd. is reaching out to propose a <strong>strategic technical partnership</strong> designed to significantly enhance your web development capacity, accelerate your time-to-market, and achieve substantial operational cost efficiencies.
+            </p>
+            
+            <div class="highlight-box">
+                <p class="highlight-text">By leveraging our specialized talent pool in Bangladesh, you can:</p>
+                <ul class="benefit-list">
+                    <li><strong>Access Expertise:</strong> Secure specialized skills in modern architectural patterns instantly</li>
+                    <li><strong>Optimize ROI:</strong> Achieve estimated <strong>40-60% savings</strong> on development costs</li>
+                    <li><strong>Ensure Velocity:</strong> Maintain high development pace and continuous deployment cycles</li>
+                </ul>
+            </div>
+            
+            <h3 class="section-header">Core Technical Competencies & Expertise</h3>
+            
+            <table class="competency-table">
+                <tr>
+                    <th width="25%">Domain</th>
+                    <th width="35%">Key Technologies & Frameworks</th>
+                    <th width="40%">Architectural Focus</th>
+                </tr>
+                <tr>
+                    <td class="domain-name">Front-End Development</td>
+                    <td>React.js (Next.js), Vue.js (Nuxt.js), Angular, TypeScript, SASS/LESS</td>
+                    <td>Single Page Applications (SPA), Progressive Web Apps (PWA), Component-Based Design</td>
+                </tr>
+                <tr>
+                    <td class="domain-name">Back-End Development</td>
+                    <td>Node.js (Express, NestJS), Python (Django/DRF), PHP (Laravel, Symfony), Java (Spring Boot)</td>
+                    <td>Microservices Architecture, RESTful and GraphQL API Design, Serverless Computing</td>
+                </tr>
+                <tr>
+                    <td class="domain-name">Data & DevOps</td>
+                    <td>PostgreSQL, MongoDB, Redis, CI/CD pipelines, Docker, Containerization</td>
+                    <td>Database Optimization, Data Security best practices, Infrastructure-as-Code principles</td>
+                </tr>
+                <tr>
+                    <td class="domain-name">E-commerce/CMS</td>
+                    <td>Shopify (Headless Commerce), WordPress (Decoupled/Headless), Custom CMS Solutions</td>
+                    <td>API-First Development, Third-Party Integrations (Payment Gateways, CRMs)</td>
+                </tr>
+            </table>
+            
+            <h3 class="section-header">Proposed Engagement Models</h3>
+            
+            <div class="engagement-card">
+                <div class="engagement-title">1. Dedicated Team Integration (Staff Augmentation)</div>
+                <p class="engagement-desc">Our engineers are fully integrated into your existing sprints, utilizing your communication and project management tools.</p>
+                <p class="engagement-ideal">Ideal for: Long-term product maintenance, scaling core feature teams, or sustained high-demand periods.</p>
+            </div>
+            
+            <div class="engagement-card">
+                <div class="engagement-title">2. Fixed-Scope Project Delivery</div>
+                <p class="engagement-desc">A clear Statement of Work (SOW) defines project scope, timeline, and fixed budget. We take full ownership of delivery management.</p>
+                <p class="engagement-ideal">Ideal for: Specific feature builds, MVPs, or defined legacy system migrations.</p>
+            </div>
+            
+            <div class="engagement-card">
+                <div class="engagement-title">3. Flexible Hourly Support (Time & Material)</div>
+                <p class="engagement-desc">Resources billed monthly based on actual hours spent, providing maximum flexibility for evolving requirements.</p>
+                <p class="engagement-ideal">Ideal for: Ongoing technical support, non-linear R&D projects, or systems maintenance.</p>
+            </div>
+            
+            <h3 class="section-header">Operational Advantage</h3>
+            
+            <table class="advantage-table">
+                <tr>
+                    <th width="30%">Key Benefit</th>
+                    <th width="70%">Technical and Operational Impact</th>
+                </tr>
+                <tr>
+                    <td class="domain-name">Technical Excellence</td>
+                    <td>Delivery of secure, highly performant, and peer-reviewed code adhering to international SOLID principles and coding standards.</td>
+                </tr>
+                <tr>
+                    <td class="domain-name">Cost Efficiency</td>
+                    <td>Achieve superior resource quality at a highly competitive rate, significantly improving your project CAPEX/OPEX balance.</td>
+                </tr>
+                <tr>
+                    <td class="domain-name">Time Zone Synergy</td>
+                    <td>Our Dhaka base offers a productive overlap with Canadian/EST business hours, enabling real-time daily sync-ups and faster bug fixes.</td>
+                </tr>
+                <tr>
+                    <td class="domain-name">Process Transparency</td>
+                    <td>Mandatory daily stand-ups, version control, continuous integration, and weekly progress demos ensure zero opacity throughout development.</td>
+                </tr>
+                <tr>
+                    <td class="domain-name">Cultural & Communication Fit</td>
+                    <td>Our team is fluent in technical and business English, with strong proficiency in Western project management methodologies and work ethics.</td>
+                </tr>
+            </table>
+            
+            <!-- Call to Action -->
+            <div class="cta-section">
+                <h3 class="cta-title">Ready to Accelerate Your Digital Innovation?</h3>
+                <p class="cta-desc">Schedule a 30-minute introductory Technical Discovery Call to discuss your immediate project needs and resource gaps.</p>
+                <a href="mailto:info@strsltd.com?subject=Schedule Technical Discovery Call" class="cta-button">📞 Schedule Discovery Call</a>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <div class="contact-info">
+                <p class="contact-item">STR Solutions Ltd | Dhaka, Bangladesh</p>
+                <p class="contact-item">📧 <a href="mailto:info@strsltd.com">ishaq@strsltd.com</a></p>
+                <p class="contact-item">📞 <a href="tel:+8801332802026">+880 1332 802026</a></p>
+                <p class="contact-item">🌐 <a href="http://strsltd.com">strsltd.com</a></p>
+                
+                <div class="signature">
+                    <p class="signature-name">Ishaq Ahmmed</p>
+                    <p class="signature-title">Business Development Manager</p>
+                    <p class="signature-title">STR Solutions Ltd</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+    `,
+});
+
+const sendBulkEmail = async () => {
+    console.log('--- Starting Email Campaign ---');
+
+    for (const email of TARGET_EMAILS) {
+        try {
+            const clientName = email.split('@')[0].includes('.')
+                ? email.split('@')[0].split('.').map(word =>
+                    word.charAt(0).toUpperCase() + word.slice(1)
+                ).join(' ')
+                : 'Valued Client';
+
+            const template = servicePromoTemplate(clientName);
+
+            const mailOptions = {
+                from: '"STRS LTD" <strsolutionsltd@gmail.com>',
+                to: email,
+                subject: template.subject,
+                html: template.html,
+            };
+
+            const result = await transporter.sendMail(mailOptions);
+            console.log(`Success: Email sent to ${email}. Message ID: ${result.messageId}`);
+
+        } catch (error) {
+            console.error(`Failed: Could not send email to ${email}. Error: ${error.message}`);
+        }
+    }
+
+    console.log('--- Campaign Finished ---');
+};
+
+sendBulkEmail();
