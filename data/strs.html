@@ -1,33 +1,4 @@
-import nodemailer from 'nodemailer';
-// Import nodemailer from 'nodemailer';
-import 'dotenv/config';
-
-const SMTP_CONFIG = {
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT, 10), 
-    secure: process.env.SMTP_SECURE === 'true', 
-    
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: "Str970#Mail!"
-    },
-    tls: {
-        rejectUnauthorized: false
-    }
-};
-
-const TARGET_EMAILS = [
-    'im.ishaq.bd@gmail.com',
-    'strsolutionsltd@gmail.com',
-
-];
-
-const transporter = nodemailer.createTransport(SMTP_CONFIG);
-
-const servicePromoTemplate = (clientName) => ({
-    subject: `Transform Your Digital Presence with STRS Solutions`,
-    html: `
-       <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -505,53 +476,3 @@ const servicePromoTemplate = (clientName) => ({
     </div>
 </body>
 </html>
-    `,
-});
-const sendBulkEmail = async () => {
-    console.log('--- Starting Email Campaign ---');
-    console.log(`Sending from: ${process.env.SMTP_USER} via Host: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT}`);
-
-    // FROM অ্যাড্রেসটি .env এর SMTP_USER ব্যবহার করে সেট করা
-    const fromAddress = `"${process.env.SMTP_USER.split('@')[0].toUpperCase()} LTD" <${process.env.SMTP_USER}>`;
-
-    for (const email of TARGET_EMAILS) {
-        try {
-            // ইমেইল অ্যাড্রেস থেকে ক্লায়েন্টের নাম তৈরি করা
-            const clientName = email.split('@')[0].includes('.')
-                ? email.split('@')[0].split('.').map(word =>
-                    word.charAt(0).toUpperCase() + word.slice(1)
-                ).join(' ')
-                : 'Valued Client';
-
-            const template = servicePromoTemplate(clientName);
-
-            const mailOptions = {
-                // Sender Address: SMTP_USER ব্যবহার করা
-                from: fromAddress, 
-                // Recipient Address
-                to: email, 
-                subject: template.subject,
-                html: template.html,
-            };
-
-            const result = await transporter.sendMail(mailOptions);
-            console.log(`✅ Success: Email sent to ${email}. Message ID: ${result.messageId}`);
-
-        } catch (error) {
-            // Error handling: ETIMEDOUT ত্রুটিটির জন্য অতিরিক্ত তথ্য দেওয়া হয়েছে
-            if (error.code === 'ETIMEDOUT') {
-                console.error(`❌ Failed: Connection Timeout (ETIMEDOUT) to ${email}. Check your network/firewall or use Port 465.`);
-            } else if (error.code === 'EENVELOPE') {
-                 console.error(`❌ Failed: Envelope Error to ${email}. Check 'to' and 'from' addresses.`);
-            }
-            else {
-                console.error(`❌ Failed: Could not send email to ${email}. Error: ${error.message}`);
-            }
-        }
-    }
-
-    console.log('--- Campaign Finished ---');
-};
-
-// ফাংশন কল করা
-sendBulkEmail();
