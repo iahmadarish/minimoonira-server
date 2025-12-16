@@ -7,7 +7,7 @@ const categorySchema = new mongoose.Schema(
       type: String,
       required: [true, "Category name is required"],
       trim: true,
-      maxlength: [100, "Category name cannot exceed 100 characters"],
+      maxlength: [1000, "Category name cannot exceed 1000 characters"],
     },
     slug: {
       type: String,
@@ -17,10 +17,10 @@ const categorySchema = new mongoose.Schema(
     },
     description: {
       type: String,
-      maxlength: [500, "Description cannot exceed 500 characters"],
+      maxlength: [5000, "Description cannot exceed 5000 characters"],
     },
     aplusContent: {
-      type: String, 
+      type: String,
       default: "",
     },
     parentCategory: {
@@ -38,11 +38,11 @@ const categorySchema = new mongoose.Schema(
     },
     metaTitle: {
       type: String,
-      maxlength: [60, "Meta title cannot exceed 60 characters"],
+      maxlength: [600, "Meta title cannot exceed 600 characters"],
     },
     metaDescription: {
       type: String,
-      maxlength: [160, "Meta description cannot exceed 160 characters"],
+      maxlength: [1600, "Meta description cannot exceed 1600 characters"],
     },
     metaKeywords: [String],
     level: {
@@ -103,7 +103,6 @@ categorySchema.pre("save", async function (next) {
 })
 
 // Index for better performance
-// categorySchema.index({ slug: 1 })
 categorySchema.index({ parentCategory: 1 })
 categorySchema.index({ isActive: 1 })
 categorySchema.index({ level: 1 })

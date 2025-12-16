@@ -1,13 +1,13 @@
 import nodemailer from 'nodemailer';
 
-// সরাসরি credentials ব্যবহার করুন
+
 const SMTP_CONFIG = {
   host: 'smtp.gmail.com',
   port: 587,
   secure: false,
   auth: {
-    user: 'weareconqueric@gmail.com', // সরাসরি email
-    pass: 'rzluffivlcpnnmtz' // সরাসরি app password
+    user: 'care2trainingglobal@gmail.com', 
+    pass: 'dntkvhawmbcxpdvs' 
   },
   tls: {
     rejectUnauthorized: false
@@ -26,13 +26,13 @@ const transporter = nodemailer.createTransport(SMTP_CONFIG);
 // Verify connection
 transporter.verify(function (error, success) {
   if (error) {
-    console.log('❌ SMTP Verification Failed:', error.message);
-    console.log('💡 Solution Steps:');
+    console.log('SMTP Verification Failed:', error.message);
+    console.log('Solution Steps:');
     console.log('1. Check if 2-step verification is ON');
     console.log('2. Verify app password is correct');
     console.log('3. Try enabling less secure apps');
   } else {
-    console.log('✅ SMTP Server is ready to send emails');
+    console.log('SMTP Server is ready to send emails');
   }
 });
 
@@ -59,7 +59,7 @@ const emailTemplates = {
     `,
   }),
 
-  // 🔥 নতুন প্রমোশন ইমেইল টেমপ্লেট যোগ করুন
+
   promotionOffer: (data) => ({
     subject: `🎁 Special Offer Just For You! ${data.discountValue}${data.discountType === 'percentage' ? '%' : '৳'} Off - Mini Moonira`,
     html: `
@@ -121,7 +121,7 @@ const emailTemplates = {
     `,
   }),
 
-  // 🔥 abandoned cart reminder ইমেইল
+
   abandonedCartReminder: (data) => ({
     subject: `👀 You left items in your cart - Mini Moonira`,
     html: `
@@ -186,7 +186,7 @@ export const sendEmail = async (options) => {
   }
 };
 
-// 🔥 নতুন প্রমোশন ইমেইল ফাংশন এক্সপোর্ট করুন
+
 export const sendPromotionEmail = async (emailData) => {
   return await sendEmail({
     email: emailData.to,
@@ -195,7 +195,7 @@ export const sendPromotionEmail = async (emailData) => {
   });
 };
 
-// 🔥 abandoned cart reminder ফাংশন
+
 export const sendAbandonedCartReminder = async (emailData) => {
   return await sendEmail({
     email: emailData.to,

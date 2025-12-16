@@ -3,13 +3,33 @@ import mongoose from "mongoose";
 import { validationResult } from "express-validator";
 import DynamicSection from "../models/DynamicSection.model.js";
 
+import { 
+  uploadSingle, 
+  uploadMultiple, 
+  setUploadDir, 
+  deleteImageFile 
+} from "../utils/upload.js";
 
 
 export const createProduct = async (req, res) => {
   try {
     console.log('Received product data:', req.body); 
 
+
+    
     const errors = validationResult(req);
+    
+    if (req.file) {
+      req.body.mainImage = `${process.env.BASE_URL || "http://localhost:5000"}/uploads/products/${req.file.filename}`;
+    }
+
+    if (req.files) {
+      const uploadedImages = req.files.map(file => 
+        `${process.env.BASE_URL || "http://localhost:5000"}/uploads/products/${file.filename}`
+      );
+      req.body.images = uploadedImages;
+    }
+    
     if (!errors.isEmpty()) {
       console.log('Validation errors:', errors.array());
       return res.status(400).json({ 
@@ -229,6 +249,15 @@ export const createProduct = async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating product:', error);
+
+    if (req.file) {
+      deleteImageFile('products', req.file.filename);
+    }
+    if (req.files) {
+      req.files.forEach(file => {
+        deleteImageFile('products', file.filename);
+      });
+    }
     
     if (error.code === 11000) {
       // Duplicate key error
@@ -504,6 +533,47 @@ export const updateProduct = async (req, res) => {
       });
     }
 
+
+const existingProduct = await Product.findById(req.params.id);
+    if (req.file) {
+      if (existingProduct.mainImage) {
+        const oldFilename = existingProduct.mainImage.split('/').pop();
+        deleteImageFile('products', oldFilename);
+      }
+      req.body.mainImage = `${process.env.BASE_URL || "http://localhost:5000"}/uploads/products/${req.file.filename}`;
+    }
+
+
+    let finalImages = existingProduct.images || [];
+    if (req.body.existingImages) {
+      const keptImages = Array.isArray(req.body.existingImages) 
+        ? req.body.existingImages 
+        : JSON.parse(req.body.existingImages);
+
+
+      const imagesToDelete = existingProduct.images.filter(img => !keptImages.includes(img));
+      
+      imagesToDelete.forEach(imgUrl => {
+        const filename = imgUrl.split('/').pop();
+        deleteImageFile('products', filename);
+      });
+
+      finalImages = keptImages;
+    }
+
+
+    if (req.files && req.files.length > 0) {
+      const newUploadedImages = req.files.map(file => 
+        `${process.env.BASE_URL || "http://localhost:5000"}/uploads/products/${file.filename}`
+      );
+      finalImages = [...finalImages, ...newUploadedImages];
+    }
+
+    req.body.images = finalImages;
+
+
+
+
     const productData = {
       ...req.body,
       basePrice: parseFloat(req.body.basePrice) || 0,
@@ -668,6 +738,16 @@ export const updateProduct = async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating product:', error);
+
+    if (req.file) {
+      deleteImageFile('products', req.file.filename);
+    }
+    if (req.files) {
+      req.files.forEach(file => {
+        deleteImageFile('products', file.filename);
+      });
+    }
+
     if (error.name === "CastError") {
       return res.status(400).json({
         success: false,
@@ -692,7 +772,7 @@ export const updateProduct = async (req, res) => {
 // Delete a product
 export const deleteProduct = async (req, res) => {
   try {
-    const product = await Product.findByIdAndDelete(req.params.id);
+    const product = await Product.findById(req.params.id);
 
     if (!product) {
       return res.status(404).json({
@@ -701,9 +781,31 @@ export const deleteProduct = async (req, res) => {
       });
     }
 
+    if (product.imageGroups && product.imageGroups.length > 0) {
+      product.imageGroups.forEach(group => {
+        if (group.images && group.images.length > 0) {
+          group.images.forEach(image => {
+            if (image.url) {
+              const filename = image.url.split('/').pop();
+              deleteImageFile('products', filename);
+            }
+          });
+        }
+      });
+    }
+
+    if (product.videos && product.videos.length > 0) {
+      product.videos.forEach(video => {
+        if (video.url) {
+          const filename = video.url.split('/').pop();
+          deleteImageFile('products', filename);
+        }
+      });
+    }
+    await Product.findByIdAndDelete(req.params.id);
     res.status(200).json({
       success: true,
-      message: "Product deleted successfully"
+      message: "Product and all associated files deleted successfully"
     });
   } catch (error) {
     if (error.name === "CastError") {

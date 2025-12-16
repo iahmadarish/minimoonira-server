@@ -1,135 +1,152 @@
-import cloudinary from 'cloudinary';
-import multer from 'multer';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
 
-cloudinary.v2.config({
-  cloud_name: 'dm6lzpfxp',
-  api_key: '946663465526379',
-  api_secret: 'vI3UkQ4CkJNc6TuQYJ46FliBPuQ'
-});
+import multer from "multer"
+import path from "path"
+import fs from "fs"
+import { fileURLToPath } from "url"
 
-console.log("Cloudinary configured with:", {
-  cloud_name: cloudinary.v2.config().cloud_name,
-  api_key: cloudinary.v2.config().api_key
-});
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
-// Configure multer storage for Cloudinary with explicit credentials
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary.v2,
-  params: {
-    folder: 'ecommerce-products',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-    transformation: [
-  { width: 1600, height: 1600, crop: 'limit', quality: 'auto' }
-],
-    public_id: (req, file) => {
-      return `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
-    }
+
+const uploadsDir = path.join(process.cwd(), "uploads"); 
+const productsDir = path.join(uploadsDir, "products");
+
+
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true })
+  console.log("Created uploads directory:", uploadsDir)
+}
+if (!fs.existsSync(productsDir)) {
+  fs.mkdirSync(productsDir, { recursive: true })
+  console.log("Created products directory:", productsDir)
+}
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    console.log("Destination directory:", productsDir)
+    console.log("Directory exists:", fs.existsSync(productsDir))
+    cb(null, productsDir)
   },
-});
-
-// File filter
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image/')) {
-    cb(null, true);
-  } else {
-    cb(new Error('Not an image! Please upload only images.'), false);
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9)
+    const ext = path.extname(file.originalname)
+    const filename = `product-${uniqueSuffix}${ext}`
+    console.log("Generated filename:", filename)
+    cb(null, filename)
   }
-};
+})
 
-// Create multer instance
+// File filter (same as before)
+const fileFilter = (req, file, cb) => {
+  const allowedMimes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]
+  if (allowedMimes.includes(file.mimetype)) {
+    cb(null, true)
+  } else {
+    cb(new Error("Only JPEG, JPG, PNG, WEBP, and GIF files are allowed."), false)
+  }
+}
+
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
+    fileSize: 5 * 1024 * 1024,
   }
-});
+})
 
+
+export const uploadMultipleImages = async (req, res) => {
+  try {
+    console.log("Upload request received")
+    console.log("Files:", req.files)
+    console.log("Upload directory:", productsDir)
+    
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No files uploaded'
+      })
+    }
+
+    // Check if files actually exist on disk
+    req.files.forEach((file, index) => {
+      console.log(`File ${index}:`, {
+        filename: file.filename,
+        path: file.path,
+        size: file.size,
+        exists: fs.existsSync(file.path)
+      })
+    })
+
+    const baseUrl = process.env.BASE_URL || "http://localhost:5000"
+    
+    const uploadedFiles = req.files.map(file => {
+      // Create correct URL
+      const fileUrl = `${baseUrl}/uploads/products/${file.filename}`
+      
+      return {
+        url: fileUrl,
+        filename: file.filename,
+        originalname: file.originalname,
+        size: file.size,
+        mimetype: file.mimetype,
+        path: file.path, 
+        public_id: file.filename
+      }
+    })
+
+    console.log("Uploaded files info:", uploadedFiles)
+
+    res.status(200).json({
+      success: true,
+      message: 'Images uploaded successfully',
+      files: uploadedFiles,
+      count: uploadedFiles.length
+    })
+
+  } catch (error) {
+    console.error('Upload error:', error.message)
+    res.status(500).json({
+      success: false,
+      message: 'Error uploading images: ' + error.message
+    })
+  }
+}
+
+// Single Image Upload (Local)
 export const uploadImage = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
         success: false,
         message: 'No file uploaded'
-      });
+      })
     }
+
+    const baseUrl = process.env.BASE_URL || "http://localhost:5000"
+    const imageUrl = `${baseUrl}/uploads/products/${req.file.filename}`
 
     res.status(200).json({
       success: true,
       message: 'Image uploaded successfully',
-      image: {
-        url: req.file.path,
-        public_id: req.file.filename
+      imageUrl: imageUrl,
+      filename: req.file.filename,
+      file: {
+        url: imageUrl,
+        filename: req.file.filename,
+        originalname: req.file.originalname,
+        size: req.file.size,
+        mimetype: req.file.mimetype
       }
-    });
+    })
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('Upload error:', error)
     res.status(500).json({
       success: false,
       message: 'Error uploading image'
-    });
+    })
   }
-};
-
-export const uploadMultipleImages = async (req, res) => {
-  try {
-    console.log("Cloudinary config check:", {
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-      api_key: process.env.CLOUDINARY_API_KEY,
-      api_secret: process.env.CLOUDINARY_API_SECRET ? 'SET' : 'MISSING'
-    });
-
-    // Verify Cloudinary is configured
-    if (!process.env.CLOUDINARY_API_KEY) {
-      console.error("Cloudinary API key is missing!");
-      return res.status(500).json({
-        success: false,
-        message: 'Cloudinary not configured properly'
-      });
-    }
-
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No files uploaded'
-      });
-    }
-
-    // Test Cloudinary connection
-    try {
-      // Simple test to verify Cloudinary works
-      await cloudinary.v2.api.ping();
-      console.log("Cloudinary connection test passed");
-    } catch (testError) {
-      console.error("Cloudinary connection test failed:", testError);
-      return res.status(500).json({
-        success: false,
-        message: 'Cloudinary connection failed: ' + testError.message
-      });
-    }
-
-    const uploadedImages = req.files.map(file => ({
-      url: file.path,
-      public_id: file.filename,
-      originalname: file.originalname
-    }));
-
-    res.status(200).json({
-      success: true,
-      message: 'Images uploaded successfully',
-      images: uploadedImages
-    });
-
-  } catch (error) {
-    console.error('Upload error:', error.message);
-    res.status(500).json({
-      success: false,
-      message: 'Error uploading images: ' + error.message
-    });
-  }
-};
-
+}
 // Error handling middleware
 export const handleUploadError = (error, req, res, next) => {
   if (error instanceof multer.MulterError) {
@@ -137,55 +154,35 @@ export const handleUploadError = (error, req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'File too large. Maximum size is 5MB.'
-      });
+      })
     }
     if (error.code === 'LIMIT_FILE_COUNT') {
       return res.status(400).json({
         success: false,
         message: 'Too many files uploaded.'
-      });
+      })
     }
     if (error.code === 'LIMIT_UNEXPECTED_FILE') {
       return res.status(400).json({
         success: false,
         message: 'Unexpected file field.'
-      });
+      })
     }
   }
   
-  if (error.message === 'Not an image! Please upload only images.') {
+  if (error.message === 'Only JPEG, JPG, PNG, WEBP, and GIF files are allowed.') {
     return res.status(400).json({
       success: false,
       message: error.message
-    });
+    })
   }
   
-  console.error('Upload error:', error);
+  console.error('Upload error:', error)
   res.status(500).json({
     success: false,
     message: 'Upload failed: ' + error.message
-  });
-};
+  })
+}
 
-// Add this to your uploadController.js or create a new route
-export const debugEnv = async (req, res) => {
-  console.log("Environment variables:", {
-    CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
-    CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
-    CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET ? '***SET***' : 'MISSING',
-    NODE_ENV: process.env.NODE_ENV
-  });
-
-  res.status(200).json({
-    success: true,
-    env: {
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-      api_key: process.env.CLOUDINARY_API_KEY,
-      api_secret: process.env.CLOUDINARY_API_SECRET ? '***SET***' : 'MISSING'
-    }
-  });
-};
-
-
-// Export the multer instance as default
-export default upload;
+// Export the multer instance
+export default upload

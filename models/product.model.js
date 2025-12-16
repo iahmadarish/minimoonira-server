@@ -3,11 +3,14 @@ import mongoose from "mongoose";
 const imageSchema = new mongoose.Schema(
   {
     url: { type: String, required: true },
-    public_id: { type: String },
+    public_id: { type: String }, // Optional for Cloudinary
+    filename: { type: String }, // ✅ Add filename for local storage
     alt: { type: String, trim: true },
+    size: { type: Number }, // Optional
+    mimetype: { type: String } // Optional
   },
   { _id: false }
-);
+)
 
 
 const optionSchema = new mongoose.Schema(
