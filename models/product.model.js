@@ -3,11 +3,11 @@ import mongoose from "mongoose";
 const imageSchema = new mongoose.Schema(
   {
     url: { type: String, required: true },
-    public_id: { type: String }, // Optional for Cloudinary
-    filename: { type: String }, // ✅ Add filename for local storage
+    public_id: { type: String },
+    filename: { type: String }, 
     alt: { type: String, trim: true },
-    size: { type: Number }, // Optional
-    mimetype: { type: String } // Optional
+    size: { type: Number }, 
+    mimetype: { type: String } 
   },
   { _id: false }
 )
@@ -18,8 +18,7 @@ const optionSchema = new mongoose.Schema(
     name: { 
       type: String, 
       required: true, 
-      trim: true, 
-      // enum: ['Color', 'Size', 'Material', 'Style', 'Bundle'], 
+      trim: true,  
       default: 'Color' 
     },
     values: [{ type: String, trim: true, required: true }],
@@ -32,8 +31,8 @@ const variantSchema = new mongoose.Schema(
   {
     options: [ 
       {
-        name: { type: String, trim: true, required: true }, // e.g., "Color" 
-        value: { type: String, trim: true, required: true }, // e.g., "Red"
+        name: { type: String, trim: true, required: true }, 
+        value: { type: String, trim: true, required: true }, 
         _id: false
       }
     ],
@@ -148,7 +147,7 @@ const productSchema = new mongoose.Schema(
   }
 );
 
-// Generate slug from name
+
 productSchema.pre("save", function (next) {
   if (this.isModified("name") && this.name) {
     this.slug = this.name
@@ -169,7 +168,6 @@ productSchema.pre("save", function (next) {
 productSchema.statics.generateAllVariants = function(variantOptions, baseVariantData = {}) {
   if (!variantOptions || variantOptions.length === 0) return [];
 
-  // Recursive function to generate all combinations
   const generateCombinations = (options, currentIndex = 0, currentCombination = []) => {
     if (currentIndex === options.length) {
       return [currentCombination];
@@ -191,14 +189,13 @@ productSchema.statics.generateAllVariants = function(variantOptions, baseVariant
 
   const allCombinations = generateCombinations(variantOptions);
   
-  // Convert to variant objects
   return allCombinations.map((combination, index) => ({
     options: combination,
     basePrice: baseVariantData.basePrice || 0,
     discountPercentage: baseVariantData.discountPercentage || 0,
     discountStart: baseVariantData.discountStart,
     discountEnd: baseVariantData.discountEnd,
-    stock: 0, // Default stock 0
+    stock: 0, 
     imageGroupName: baseVariantData.imageGroupName || '',
     sku: baseVariantData.sku ? `${baseVariantData.sku}-${index + 1}` : `VAR-${index + 1}`
   }));
@@ -216,7 +213,6 @@ function calculatePrice(
 ) {
   const now = new Date();
   
-  // প্রথমে variant discount check করুন
   if (variantDiscountPercentage > 0) {
     const variantStartDate = variantDiscountStart ? new Date(variantDiscountStart) : null;
     const variantEndDate = variantDiscountEnd ? new Date(variantDiscountEnd) : null;
@@ -230,7 +226,7 @@ function calculatePrice(
     }
   }
   
-  // Variant discount না থাকলে product level discount check করুন
+
   if (productDiscountPercentage > 0) {
     const productStartDate = productDiscountStart ? new Date(productDiscountStart) : null;
     const productEndDate = productDiscountEnd ? new Date(productDiscountEnd) : null;
@@ -244,20 +240,18 @@ function calculatePrice(
     }
   }
   
-  // কোনো discount না থাকলে base price return করুন
   return variantBasePrice;
 }
 
 // Pre-save hook
 productSchema.pre("save", function (next) {
-  // Main product price calculation
   this.price = calculatePrice(
     this.basePrice,
     this.discountPercentage,
     this.discountStart,
     this.discountEnd,
-    this.discountPercentage, // product level discount
-    this.discountStart,      // product level dates
+    this.discountPercentage,
+    this.discountStart,      
     this.discountEnd
   );
 
@@ -267,14 +261,13 @@ productSchema.pre("save", function (next) {
       const variantDiscountPercentage = variant.discountPercentage || 0;
       const variantDiscountStart = variant.discountStart || null;
       const variantDiscountEnd = variant.discountEnd || null;
-      
       variant.price = calculatePrice(
         variantBasePrice,
         variantDiscountPercentage,
         variantDiscountStart,
         variantDiscountEnd,
-        this.discountPercentage,  // Pass product level discount
-        this.discountStart,       // Pass product level dates  
+        this.discountPercentage, 
+        this.discountStart,      
         this.discountEnd
       );
       return variant;
@@ -283,7 +276,7 @@ productSchema.pre("save", function (next) {
 
   next();
 });
-// Validate discount dates
+
 productSchema.pre('save', function(next) {
   if (this.discountStart && this.discountEnd) {
     if (this.discountStart >= this.discountEnd) {
