@@ -128,30 +128,30 @@ userSchema.methods.getSignedJwtToken = function () {
   );
 };
 
-// Generate 6-digit OTP for email verification
+
 userSchema.methods.generateEmailVerificationOTP = function () {
-  const OTP = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+  const OTP = Math.floor(100000 + Math.random() * 900000).toString(); 
   
   this.emailVerificationOTP = crypto
     .createHash('sha256')
     .update(OTP)
     .digest('hex');
     
-  this.emailVerificationOTPExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+  this.emailVerificationOTPExpire = Date.now() + 10 * 60 * 1000; 
   
   return OTP;
 };
 
-// Generate 6-digit OTP for password reset
+
 userSchema.methods.generateResetPasswordOTP = function () {
-  const OTP = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+  const OTP = Math.floor(100000 + Math.random() * 900000).toString(); 
   
   this.resetPasswordOTP = crypto
     .createHash('sha256')
     .update(OTP)
     .digest('hex');
     
-  this.resetPasswordOTPExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+  this.resetPasswordOTPExpire = Date.now() + 10 * 60 * 1000;
   
   return OTP;
 };
