@@ -16,26 +16,30 @@ const SMTP_CONFIG = {
 
 const TARGET_EMAILS = [
     'im.ishaq.bd@gmail.com',
-    'helloeurope@profitabil.com',
-    'hellousa@profitabil.com',
+    'info@wencelworldwide.com',
+    'wgooch@goochdesignstudio.com',
+    'brando@distanthorizon.com',
 ];
 
 const transporter = nodemailer.createTransport(SMTP_CONFIG);
 
 const servicePromoTemplate = (clientName) => ({
-    subject: `Transform Your Digital Presence with CONQUERIC's Digital Expertise`,
+    subject: `CONQUERIC  - 26 CONQUER Offer`,
     html: `
-        <!DOCTYPE html>
+       <!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ishaq - Strategic MERN Stack & Digital Solutions Partner</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet">
+    <title>CONQUERIC - 26 CONQUER Campaign</title>
     <style>
-        /* General Reset & Body */
+        /* Font Import: Quicksand (Overall) */
+        @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@300..700&display=swap');
+        /* Font Import: Michroma (for high-impact discount text) */
+        @import url('https://fonts.googleapis.com/css2?family=Michroma&display=swap');
+
+
         * {
             margin: 0;
             padding: 0;
@@ -43,20 +47,22 @@ const servicePromoTemplate = (clientName) => ({
         }
 
         body {
-            font-family: 'Poppins', Arial, sans-serif;
+            font-family: "Quicksand", sans-serif;
+            /* Overall Font */
             line-height: 1.6;
-            color: #333;
-            background: #f4f4f4;
+            color: #000000;
+            background-color: #f5f7fa;
             padding: 20px;
         }
 
         .email-container {
-            max-width: 700px;
+            max-width: 650px;
             margin: 0 auto;
             background: #ffffff;
-            border-radius: 20px;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e0e7ee;
         }
 
         table {
@@ -69,142 +75,229 @@ const servicePromoTemplate = (clientName) => ({
             padding: 0;
         }
 
-        /* Header Styles - Changed Gradient Color */
+        /* Header Section */
         .header {
-            background: linear-gradient(135deg, #0a2a1c 0%, #06140b 100%);
-            /* Deep Green/Blue for Professionalism */
-            color: white;
-            padding: 40px 30px;
+            background: linear-gradient(135deg, #000000, #000000);
+            color: black;
+            padding: 35px 20px;
             text-align: center;
-            position: relative;
+            border-bottom: 2px solid#000000;
         }
 
-        .profile-image {
-            width: 100px;
-            /* Slightly smaller for professional look */
-            height: 100px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            margin: 0 auto 15px;
+        .header-logo {
+            max-width: 180px;
+            height: auto;
+            padding-top: 15px;
+            margin-bottom: 10px;
             display: block;
-            background-color: #f0f0f0;
+            margin-left: auto;
+            margin-right: auto;
         }
 
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .tagline {
+            font-size: 12px;
+            margin-top: 5px;
+            margin-bottom: 5px;
+            color: white;
+        }
+
+        /* Main Content Area */
         .content {
-            padding: 40px 35px;
-            background: #ffffff;
+            padding: 35px 30px;
         }
 
         .greeting {
-            color: #06140b;
-            font-size: 24px;
-            font-weight: 600;
-            margin-bottom: 25px;
-            border-left: 2px solid #0a2a1c;
-            padding-left: 15px;
+            color: #1f3a5f;
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 20px;
         }
 
         .intro-text {
-            color: #555;
-            font-size: 16px;
-            margin-bottom: 20px;
-            text-align: justify;
+            color: #000000;
+            font-size: 14px;
+            margin-bottom: 25px;
         }
 
-        /* Highlight Box - Now Partnership Focus */
-        .highlight-box {
-            background: linear-gradient(120deg, #e7f5e8 0%, #d4e9d7 100%);
-            padding: 25px;
-            border-radius: 15px;
-            margin: 30px 0;
-            border-left: 2px solid #0a2a1c;
+        /* Campaign Highlight Box - NEW DESIGN */
+        .campaign-box {
+            background: #d6fff6;
+            /* Darker background */
+            border: 2px solid #f7f7f7;
+            /* Bright border */
+            padding-top: 35px;
+            padding-bottom: 35px;
+            padding-left: 5px;
+            padding-right: 5px;
+            margin: 5px 0;
+            border-radius: 12px;
+            text-align: center;
+            color: rgb(228, 255, 110);
+            /* Text color change */
         }
 
-        /* New Feature Grid/Card Styling */
-        .feature-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            /* 2 columns for larger screens */
-            gap: 20px;
-            padding: 0;
-            list-style: none;
-            margin: 0;
-        }
-
-        .feature-grid li {
-            background: #ffffff;
-            /* White card background */
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-            transition: transform 0.2s;
-            border-top: 3px solid #0a2a1c;
-            /* A subtle color line */
-        }
-
-        .feature-grid li:hover {
-            transform: translateY(-3px);
-            /* Interactive effect */
-        }
-
-        .feature-icon {
+        .campaign-title {
+            color: #000000;
+            /* Bright primary color */
             font-size: 24px;
+            font-weight: 700;
             margin-bottom: 10px;
-            color: #0a2a1c;
-            display: block;
+            text-transform: uppercase;
         }
 
-        .feature-grid strong {
-            font-size: 16px;
-            display: block;
+        .campaign-discount-text {
+            font-family: "Quicksand", sans-serif;
+            /* Specific Font */
+            font-size: 30px;
+            color: #942104;
+            /* Bright discount color */
+            font-weight: 200;
+            line-height: 1.3;
             margin-bottom: 5px;
-            color: #06140b;
         }
 
-        .feature-grid p {
-            font-size: 13px;
-            color: #555;
-            line-height: 1.5;
+        .campaign-details {
+            font-size: 18px;
+            font-weight: 600;
+            color: #000000;
+            margin-top: 15px;
         }
 
-        .offer-block {
-            background: #fffdfd;
-            padding: 30px;
-            border-radius: 15px;
-            text-align: center;
-            margin: 30px 0;
-            border: 1px solid #0a2a1c;
-        }
-
-        .footer {
-            background: #0a2a1c;
-            color: white;
-            text-align: center;
-            padding: 30px 20px;
-        }
-
-        .social-links {
-            margin: 20px 0;
-        }
-
-        .social-link {
+        /* Discount Badge */
+        .discount-badge {
             display: inline-block;
-            margin: 0 10px;
-            color: white;
+            background: #006b4b;
+            /* High contrast color */
+            color: rgb(255, 255, 255);
+            font-weight: 700;
+            font-size: 9px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            margin-top: 5px;
+            margin-bottom: 5px;
+        }
+
+        /* Service Grid Styles */
+        .service-grid-table {
+            width: 100%;
+            margin-top: 25px;
+        }
+
+        .service-cell {
+            padding: 10px;
+            vertical-align: top;
+        }
+
+        .service-link {
             text-decoration: none;
-            transition: color 0.3s;
+            display: block;
+            border: 1px solid #e0e7ee;
+            border-radius: 8px;
+            padding: 15px;
+            height: 100%;
+            background: #ffffff;
+            color: #000000;
+            transition: box-shadow 0.3s ease;
         }
 
-        .social-link:hover {
-            color: #8fd19e;
+        .service-link:hover {
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
         }
 
-        /* Mobile Adjustments for Grid */
+        /* Image styling for consistent size */
+        .service-image {
+            width: 100%;
+            max-width: 100%;
+            height: 120px;
+            /* Enforce consistent height */
+            object-fit: cover;
+            /* Ensures images maintain aspect ratio */
+            border-radius: 4px;
+            margin-bottom: 10px;
+            display: block;
+            border: 1px solid #d0e0f0;
+        }
+
+        .service-title {
+            color: #1f3a5f;
+            font-size: 16px;
+            font-weight: 700;
+            margin-top: 5px;
+            margin-bottom: 5px;
+        }
+
+        .service-details {
+            font-size: 14px;
+            color: #555;
+            margin-top: 5px;
+        }
+
+        /* Section Headers */
+        .section-header {
+            color: #000000;
+            font-size: 18px;
+            font-weight: 500;
+            margin: 30px 0 15px 0;
+            padding-top: 30px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e0e7ee;
+            text-align: center;
+        }
+
+        /* Call to Action */
+        .cta-section {
+            text-align: center;
+            margin: 35px 0 20px 0;
+            padding: 25px;
+            background: linear-gradient(135deg, #1f3a5f, #0077c2);
+            border-radius: 8px;
+            color: white;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background: #5bfff1;
+            color: #1f3a5f;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 16px;
+            margin-top: 10px;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Footer */
+        .footer {
+            background: #1f3a5f;
+            color: white;
+            padding: 30px 25px;
+            text-align: center;
+            border-radius: 0 0 12px 12px;
+        }
+
+        /* Mobile Optimizations */
         @media (max-width: 600px) {
-            .feature-grid {
-                grid-template-columns: 1fr;
-                /* Single column on mobile */
+            .service-cell {
+                display: block;
+                width: 100%;
+                padding: 10px 0;
+            }
+
+            .service-grid-table,
+            .service-link {
+                display: block;
+            }
+
+            .campaign-discount-text {
+                font-size: 20px !important;
             }
         }
     </style>
@@ -215,118 +308,186 @@ const servicePromoTemplate = (clientName) => ({
         <table role="presentation" width="100%" class="header">
             <tr>
                 <td align="center">
-                    <img src="https://res.cloudinary.com/dq64rvefq/image/upload/v1764436508/Gemini_Generated_Image_t99ol5t99ol5t99o_jobuqr.png"
-                        alt="Ishaq Ahmad" class="profile-image">
-                    <div
-                        style="font-size: 38px; font-weight: 700; margin-bottom: 5px; text-shadow: 1px 1px 3px rgba(0,0,0,0.4);">
-                        ISHAQ AHMAD</div>
-                    <div style="font-size: 20px; opacity: 0.9; font-weight: 300; margin-bottom: 15px;">Strategic Tech
-                        Partner for Digital Agencies</div>
-                    <div style="font-size: 16px; opacity: 0.8; font-weight: 300;">Full-Stack Development • Custom Apps •
-                        Design Integration</div>
+                    <!-- Updated Logo URL & Alt Text -->
+                    <img src="https://conqueric.com/assets/logo-DcXsJPrF.png" alt="CONQUERIC Logo"
+                        class="header-logo" width="180">
+                    <div class="tagline">Terning Ideas into impacts</div>
                 </td>
             </tr>
         </table>
 
         <div class="content">
-            <h2 class="greeting">Hello Profitabil Authorities,</h2>
+            <h2 class="greeting">Dear Recipients,</h2>
 
             <p class="intro-text">
-                I am Ishaq Ahmad, and I lead a dedicated team of MERN Stack, App Development, and Design specialists. We
-                recognize your company's strong reputation in the Branding, SEO and Digital Marketing space.
+                For your company, the digital storefront is just as crucial as the physical
+                one. This is your moment to elevate your online presence from concept to stunning reality. <a
+                    href="https://www.conqueric.com/"
+                    style="color: #105cff; text-decoration: none; font-weight: bold;"> CONQUERIC</a> specializes in
+                crafting seamless e-commerce experiences and captivating visual branding that ensures your unique
+                aesthetic stands out in the competitive fashion market. Don’t let digital opportunity wait.
+                Let’s shape your next chapter—stronger, more stylish, and ready for 2026.
             </p>
 
-            <p class="intro-text">
-                We're reaching out not as a direct service provider, but with a proposal for a strategic partnership. We
-                aim to become your reliable, high-quality in-house technical arm for clients requiring robust
-                development and design to complement your marketing expertise.
-            </p>
-
-            <div class="highlight-box">
-                <div
-                    style="color: #06140b; font-size: 22px; font-weight: 700; margin-bottom: 15px; text-align: center;">
-                    Our Technical Advantage
+            <div class="campaign-box">
+                <!-- Updated Campaign Name -->
+                <p class="campaign-title">26 CONQUER Offer</p>
+                <div class="campaign-discount-text" style="font-family: 'Michroma', sans-serif; 
+    font-size: 40px; 
+    font-weight: 700; 
+    line-height: 1.3; 
+    margin-bottom: 5px; 
+    color: #ff3300; 
+    text-align:center;">
+                    25% OFF ALL SERVICES
                 </div>
-
-                <ul class="feature-grid">
-                    <li>
-                        <span class="feature-icon">⚡</span>
-                        <strong>MERN Stack Performance & SEO</strong>
-                        <p>Develop scalable, secure, and performant web apps that inherently boost Core Web Vitals and
-                            search rankings.</p>
-                    </li>
-                    <li>
-                        <span class="feature-icon">📲</span>
-                        <strong>End-to-End App Development</strong>
-                        <p>Seamlessly offer custom iOS/Android solutions that integrate with your clients' marketing
-                            strategy and backends.</p>
-                    </li>
-                    <li>
-                        <span class="feature-icon">👩‍💻</span>
-                        <strong>Conversion-Driven UI/UX Design</strong>
-                        <p>High-fidelity (Figma) design services focused on maximizing user flow, retention, and
-                            conversion rates.</p>
-                    </li>
-                    <li>
-                        <span class="feature-icon">🛡️</span>
-                        <strong>Infrastructure & Reliability (24/7)</strong>
-                        <p>Full-service hosting, deployment, and maintenance, guaranteeing high uptime and security for
-                            your referred projects.</p>
-                    </li>
-                </ul>
-            </div>
-
-            <div class="offer-block">
-                <h3 style="margin-bottom: 15px; font-size: 24px; color: #012b0b;">Partnership for Accelerated Growth &
-                    Profitability</h3>
-                <p style="margin-bottom: 20px; opacity: 100; font-size: 15px;">
-                    We don't just complete projects; we create a structured, highly efficient pipeline that allows your
-                    Company to <span style="color: #064edd; font-weight: bold;"> **scale its development services
-                        overnight** </span>without the risk and cost of expanding an internal team.
-                </p>
-                <p style="font-weight: 600; font-size: 15px;">
-                    This technical synergy enables you to offer a robust, premium full-stack solution to your clients,
-                    ensuring **maximum quality** and securing **significantly higher profit margins** on every project.
+                <div class="campaign-details">
+                    + 2 years Free Technical Maintenance
+                </div>
+                <p style="font-size: 13px; color: #232527; margin-top: 10px;">
+                    Offer strictly limited to projects initiated with a discovery call in December 2025.
                 </p>
             </div>
 
-            <p class="intro-text" style="text-align: center; margin-top: 30px;">
-                We are confident that our technical capacity, combined with your market expertise, will create a
-                powerful and lucrative collaboration. We look forward to building this strategic partnership with you,
-                utilizing my team's services and technical expertise to achieve mutual growth.
-            </p>
+            <h3 class="section-header">Our Kickstart Services (All Included in the Offer)</h3>
+
+            <table role="presentation" class="service-grid-table" width="100%">
+                <tr>
+                    <td class="service-cell" width="50%">
+                        <!-- Updated Link -->
+                        <a href="http://conqueric.com/web-development" class="service-link">
+                            <img src="https://cdn.dribbble.com/userupload/9146565/file/original-ec8bb14b6ab23326e030be88c5b645ae.png?resize=400x0"
+                                alt="Web Development Icon" class="service-image" width="100%">
+                            <div class="discount-badge">25% OFF + 2 Years Free</div>
+                            <div class="service-title">Web Development</div>
+                            <p class="service-details">
+                                Cutting-edge front-end (React/Next.js) & scalable back-end (Node/Python) solutions for
+                                high-performance web platforms.
+                            </p>
+                        </a>
+                    </td>
+
+                    <td class="service-cell" width="50%">
+                        <!-- Updated Link -->
+                        <a href="http://conqueric.com/app-development" class="service-link">
+                            <img src="https://www.echoinnovateit.com/wp-content/uploads/2023/08/mobile-app-development.png"
+                                alt="Mobile App Development Icon" class="service-image" width="100%">
+                            <div class="discount-badge">25% OFF + 2 Years Free</div>
+                            <div class="service-title">App Development</div>
+                            <p class="service-details">
+                                Native and cross-platform mobile apps for iOS and Android using modern frameworks like
+                                React Native or Flutter.
+                            </p>
+                        </a>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td class="service-cell" width="50%">
+                        <!-- Updated Link -->
+                        <a href="http://conqueric.com/digital-marketing" class="service-link">
+                            <img src="https://ireyprod.com/wp-content/uploads/2023/01/lone-fir-creative-Which-Digital-Marketing-Services-Are-Right-For-You.webp"
+                                alt="Digital Marketing Icon" class="service-image" width="100%">
+                            <div class="discount-badge">25% OFF + 2 Years Free</div>
+                            <div class="service-title">Digital Marketing & Branding</div>
+                            <p class="service-details">
+                                Comprehensive strategies for brand building, content marketing, and targeted ad
+                                campaigns across all major platforms.
+                            </p>
+                        </a>
+                    </td>
+
+                    <td class="service-cell" width="50%">
+                        <!-- Updated Link -->
+                        <a href="http://conqueric.com/seo-services" class="service-link">
+                            <img src="https://mews.agency/wp-content/uploads/2021/12/mews-seoo.png" alt="SEO Icon"
+                                class="service-image" width="100%">
+                            <div class="discount-badge">25% OFF + 2 Years Free</div>
+                            <div class="service-title">SEO Services</div>
+                            <p class="service-details">
+                                Boost visibility with technical and on-page SEO audits and implementation, driving
+                                organic traffic and higher rankings.
+                            </p>
+                        </a>
+                    </td>
+                </tr>
+            </table>
+
+            <div class="cta-section">
+                <h3 class="cta-title">Ready to Kickstart Your 2026?</h3>
+                <p class="cta-desc">Schedule your quick 30-minute Technical Discovery Call this December to lock in the
+                    25% discount and 2 Years of free support!</p>
+                <!-- Updated Mailto Subject and Email -->
+                <a href="mailto:info@conqueric.com?subject=26 CONQUER: Secure 25% Discount" class="cta-button">
+                    📞 Schedule Discovery Call
+                </a>
+            </div>
         </div>
 
-        <div class="footer">
-            <div style="margin: 25px 0;">
-                <h3 style="color: white; margin-bottom: 15px; font-size: 20px;"></h3>
-                <div style="margin: 8px 0; font-size: 15px;">📧 <a href="mailto:info@conqueric.com"
-                        style="color: #8fd19e; text-decoration: none; font-weight: 600;">info@conqueric.com</a></div>
-                <div style="margin: 8px 0; font-size: 15px;">🌐 <a href="https://conqueric.com"
-                        style="color: #8fd19e; text-decoration: none;">conqueric.com</a></div>
+        <div style="
+    background: #1f3a5f;
+    color: white;
+    padding: 35px 25px;
+    text-align: center;
+    border-radius: 0 0 12px 12px;
+    font-family: 'Quicksand', sans-serif;
+">
+
+            <div style="margin-bottom: 18px;">
+                <p style="color: #ffffff; margin: 4px 0; font-size: 15px;">
+                    <!-- Updated Company Name -->
+                    CONQUERIC | Dhaka, Bangladesh
+                </p>
+                <p style="color: #ffffff; margin: 4px 0; font-size: 15px;">
+                    <!-- Updated Email -->
+                    📧 <a href="mailto:info@conqueric.com"
+                        style="color: #68f0a7; text-decoration: none; font-weight: 600;">
+                        info@conqueric.com
+                    </a>
+                </p>
+                <p style="color: #ffffff; margin: 4px 0; font-size: 15px;">
+                    <!-- Updated Phone Link and Number -->
+                    📞 <a href="tel:01568202839" style="color: #68f0a7; text-decoration: none; font-weight: 600;">
+                        01568202839
+                    </a>
+                </p>
+                <p style="color: #ffffff; margin: 4px 0; font-size: 15px;">
+                    <!-- Updated Website Link -->
+                    🌐 <a href="http://conqueric.com" style="color: #68f0a7; text-decoration: none; font-weight: 600;">
+                        conqueric.com
+                    </a>
+                </p>
             </div>
 
-            <div class="social-links">
-                <a href="https://wa.me/8801568202839" class="social-link" title="WhatsApp">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path
-                            d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893-.001-3.189-1.262-6.187-3.55-8.444" />
-                    </svg>
+            <!-- Social Media Icons (Replaces Signature Box) -->
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
+                <p style="font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.7); margin-bottom: 10px;">Connect
+                    With Us</p>
+
+                <!-- Facebook Icon -->
+                <a href="https://www.facebook.com/conquericit/"
+                    style="text-decoration: none; margin: 0 8px; display: inline-block;">
+                    <img src="https://placehold.co/30x30/4267B2/ffffff?text=f" alt="Facebook" width="30" height="30"
+                        style="border-radius: 50%; vertical-align: middle; border: 1px solid #4267B2;">
                 </a>
-                <a href="https://www.linkedin.com/in/iahmadarish/" class="social-link" title="LinkedIn">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path
-                            d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-                    </svg>
+
+                <!-- Instagram Icon -->
+                <a href="https://www.facebook.com/conquericit/"
+                    style="text-decoration: none; margin: 0 8px; display: inline-block;">
+                    <img src="https://placehold.co/30x30/E1306C/ffffff?text=in" alt="Instagram" width="30" height="30"
+                        style="border-radius: 50%; vertical-align: middle; border: 1px solid #E1306C;">
+                </a>
+
+                <!-- YouTube Icon -->
+                <a href="https://www.facebook.com/conquericit/"
+                    style="text-decoration: none; margin: 0 8px; display: inline-block;">
+                    <img src="https://placehold.co/30x30/FF0000/ffffff?text=Yt" alt="YouTube" width="30" height="30"
+                        style="border-radius: 50%; vertical-align: middle; border: 1px solid #FF0000;">
                 </a>
             </div>
 
-            <div style="margin-top: 25px; padding-top: 25px; border-top: 1px solid rgba(255,255,255,0.2);">
-                <p style="font-weight: 600; margin-bottom: 5px;">Best regards,</p>
-                <p style="margin-bottom: 5px;"><strong>Ishaq Ahmad</strong></p>
-                <p style="opacity: 0.9; font-size: 14px;">Business coordinator</p>
-            </div>
         </div>
+
     </div>
 </body>
 
@@ -348,7 +509,7 @@ const sendBulkEmail = async () => {
             const template = servicePromoTemplate(clientName);
 
             const mailOptions = {
-                from: '"CONQUERIC" <conqueric@gmail.com>',
+                from: '"CONQUERIC" <weareconqueric@gmail.com>',
                 to: email,
                 subject: template.subject,
                 html: template.html,
