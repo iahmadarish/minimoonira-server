@@ -1,72 +1,92 @@
 import Product from "../models/product.model.js";
-import mongoose from "mongoose"; 
+import mongoose from "mongoose";
 import { validationResult } from "express-validator";
 import DynamicSection from "../models/DynamicSection.model.js";
 
-import { 
-  uploadSingle, 
-  uploadMultiple, 
-  setUploadDir, 
-  deleteImageFile 
+import {
+  uploadSingle,
+  uploadMultiple,
+  setUploadDir,
+  deleteImageFile
 } from "../utils/upload.js";
 
 
+
+const calculatePrice = (basePrice, discountType, discountValue) => {
+  const base = parseFloat(basePrice) || 0;
+  const discount = parseFloat(discountValue) || 0;
+
+  if (discountType === "percentage") {
+    return Math.max(0, base - (base * discount) / 100);
+  } else if (discountType === "fixed") {
+    return Math.max(0, base - discount);
+  }
+  return base;
+};
+
 export const createProduct = async (req, res) => {
   try {
-    console.log('Received product data:', req.body); 
+    console.log('Received product data:', req.body);
 
-
-    
     const errors = validationResult(req);
-    
+
     if (req.file) {
       req.body.mainImage = `${process.env.BASE_URL || "http://localhost:5000"}/uploads/products/${req.file.filename}`;
     }
 
     if (req.files) {
-      const uploadedImages = req.files.map(file => 
+      const uploadedImages = req.files.map(file =>
         `${process.env.BASE_URL || "http://localhost:5000"}/uploads/products/${file.filename}`
       );
       req.body.images = uploadedImages;
     }
-    
+
     if (!errors.isEmpty()) {
       console.log('Validation errors:', errors.array());
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
         message: 'Validation errors',
-        errors: errors.array() 
+        errors: errors.array()
       });
     }
 
     // Ensure category is a valid ObjectId
     if (!mongoose.Types.ObjectId.isValid(req.body.category)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'Invalid category ID' 
+        message: 'Invalid category ID'
       });
     }
-    
+
     // Handle subCategory if provided
     if (req.body.subCategory && !mongoose.Types.ObjectId.isValid(req.body.subCategory)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'Invalid subCategory ID' 
+        message: 'Invalid subCategory ID'
       });
     }
-    
-    // Parse numeric fields to ensure they're numbers
+
+    // Parse numeric fields with new discount system
     const productData = {
       ...req.body,
       basePrice: parseFloat(req.body.basePrice) || 0,
-      discountPercentage: parseFloat(req.body.discountPercentage) || 0,
+      discountType: req.body.discountType || "none",
+      discountValue: parseFloat(req.body.discountValue) || 0,
       stock: parseInt(req.body.stock) || 0,
       lowStockAlert: parseInt(req.body.lowStockAlert) || 5,
       weight: parseFloat(req.body.weight) || 0,
       aplusContent: req.body.aplusContent || '',
       bulletPoints: Array.isArray(req.body.bulletPoints) ? req.body.bulletPoints : [],
     };
-    
+
+    // Validate discount value based on type
+    if (productData.discountType === "percentage" && productData.discountValue > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Percentage discount cannot exceed 100%'
+      });
+    }
+
     // Parse dimensions
     if (req.body.dimensions) {
       productData.dimensions = {
@@ -76,26 +96,11 @@ export const createProduct = async (req, res) => {
       };
     }
 
-    // Handle main product discount dates - UTC হিসেবে স্টোর
-    if (req.body.discountStart) {
-      const startDate = new Date(req.body.discountStart);
-      productData.discountStart = isNaN(startDate.getTime()) ? null : startDate;
-    } else {
-      productData.discountStart = null;
-    }
-
-    if (req.body.discountEnd) {
-      const endDate = new Date(req.body.discountEnd);
-      productData.discountEnd = isNaN(endDate.getTime()) ? null : endDate;
-    } else {
-      productData.discountEnd = null;
-    }
-
     // UNIVERSAL VARIANT HANDLING - ANY PRODUCT TYPE
     if (req.body.hasVariants && req.body.variantOptions && Array.isArray(req.body.variantOptions)) {
       productData.hasVariants = true;
       productData.variantOptions = req.body.variantOptions;
-      
+
       // Function to generate all possible combinations for ANY variant options
       const generateAllVariants = (variantOptions, baseData = {}) => {
         if (!variantOptions || variantOptions.length === 0) return [];
@@ -121,9 +126,9 @@ export const createProduct = async (req, res) => {
         };
 
         const allCombinations = generateCombinations(variantOptions);
-        
+
         console.log(`Generated ${allCombinations.length} variant combinations`);
-        
+
         // Convert to variant objects with universal defaults
         return allCombinations.map((combination, index) => {
           // Find if this combination already exists in manually provided variants
@@ -131,8 +136,8 @@ export const createProduct = async (req, res) => {
             if (!manualVariant.options || manualVariant.options.length !== combination.length) {
               return false;
             }
-            return combination.every(combOpt => 
-              manualVariant.options.some(manualOpt => 
+            return combination.every(combOpt =>
+              manualVariant.options.some(manualOpt =>
                 manualOpt.name === combOpt.name && manualOpt.value === combOpt.value
               )
             );
@@ -142,9 +147,8 @@ export const createProduct = async (req, res) => {
           return {
             options: combination,
             basePrice: existingVariant?.basePrice || baseData.basePrice || productData.basePrice || 0,
-            discountPercentage: existingVariant?.discountPercentage || baseData.discountPercentage || productData.discountPercentage || 0,
-            discountStart: existingVariant?.discountStart || baseData.discountStart || productData.discountStart,
-            discountEnd: existingVariant?.discountEnd || baseData.discountEnd || productData.discountEnd,
+            discountType: existingVariant?.discountType || baseData.discountType || productData.discountType || "none",
+            discountValue: existingVariant?.discountValue || baseData.discountValue || productData.discountValue || 0,
             stock: existingVariant?.stock || 0, // Default stock 0 for new variants
             imageGroupName: existingVariant?.imageGroupName || '',
             sku: existingVariant?.sku || `${productData.sku || 'PROD'}-${index + 1}`
@@ -156,18 +160,21 @@ export const createProduct = async (req, res) => {
       if (req.body.variants && Array.isArray(req.body.variants) && req.body.variants.length > 0) {
         console.log('Using manually provided variants');
         productData.variants = req.body.variants.map(variant => {
-          // Handle discount dates for each variant - UTC হিসেবে স্টোর
-          let variantDiscountStart = null;
-          let variantDiscountEnd = null;
-          
-          if (variant.discountStart) {
-            const startDate = new Date(variant.discountStart);
-            variantDiscountStart = isNaN(startDate.getTime()) ? null : startDate;
+          // Validate variant discount value
+          if (variant.discountType === "percentage" && variant.discountValue > 100) {
+            throw new Error(`Variant percentage discount cannot exceed 100%`);
           }
-          
-          if (variant.discountEnd) {
-            const endDate = new Date(variant.discountEnd);
-            variantDiscountEnd = isNaN(endDate.getTime()) ? null : endDate;
+
+          const variantBasePrice = parseFloat(variant.basePrice) || parseFloat(productData.basePrice) || 0;
+          const variantDiscountType = variant.discountType || productData.discountType || "none";
+          const variantDiscountValue = parseFloat(variant.discountValue) || 0;
+
+          // ✅ Calculate price for variant
+          let variantPrice = variantBasePrice;
+          if (variantDiscountType !== "none" && variantDiscountValue > 0) {
+            variantPrice = calculatePrice(variantBasePrice, variantDiscountType, variantDiscountValue);
+          } else if (productData.discountType !== "none" && productData.discountValue > 0) {
+            variantPrice = calculatePrice(variantBasePrice, productData.discountType, productData.discountValue);
           }
 
           return {
@@ -175,25 +182,41 @@ export const createProduct = async (req, res) => {
               name: opt.name,
               value: opt.value,
             })) : [],
-            
-            basePrice: parseFloat(variant.basePrice) || parseFloat(productData.basePrice) || 0,
-            discountPercentage: parseFloat(variant.discountPercentage) || 0,
-            discountStart: variantDiscountStart,
-            discountEnd: variantDiscountEnd,
+
+            basePrice: variantBasePrice,
+            discountType: variantDiscountType,
+            discountValue: variantDiscountValue,
+            price: variantPrice, // ✅ Add calculated price
             stock: parseInt(variant.stock) || 0,
             imageGroupName: variant.imageGroupName || '',
             sku: variant.sku || ''
           };
         });
-      } 
-      // CASE 2: No manual variants - auto-generate ALL possible combinations
-      else {
+      } {
         console.log('Auto-generating all variant combinations');
         productData.variants = generateAllVariants(req.body.variantOptions, {
           basePrice: productData.basePrice,
-          discountPercentage: productData.discountPercentage,
-          discountStart: productData.discountStart,
-          discountEnd: productData.discountEnd
+          discountType: productData.discountType,
+          discountValue: productData.discountValue
+        });
+
+        // ✅ Auto-generated variants-এর জন্য price calculate করুন
+        productData.variants = productData.variants.map(variant => {
+          const variantBasePrice = variant.basePrice || productData.basePrice || 0;
+          const variantDiscountType = variant.discountType || productData.discountType || "none";
+          const variantDiscountValue = variant.discountValue || productData.discountValue || 0;
+
+          let variantPrice = variantBasePrice;
+          if (variantDiscountType !== "none" && variantDiscountValue > 0) {
+            variantPrice = calculatePrice(variantBasePrice, variantDiscountType, variantDiscountValue);
+          } else if (productData.discountType !== "none" && productData.discountValue > 0) {
+            variantPrice = calculatePrice(variantBasePrice, productData.discountType, productData.discountValue);
+          }
+
+          return {
+            ...variant,
+            price: variantPrice
+          };
         });
       }
     } else {
@@ -231,17 +254,17 @@ export const createProduct = async (req, res) => {
     if (req.body.metaKeywords && Array.isArray(req.body.metaKeywords)) {
       productData.metaKeywords = req.body.metaKeywords;
     }
-    
-    console.log('Processed product data:', productData); 
+
+    console.log('Processed product data:', productData);
     console.log(`Variant Info: hasVariants=${productData.hasVariants}, variantCount=${productData.variants?.length || 0}`);
-    
+
     // Create product
     const product = new Product(productData);
     const savedProduct = await product.save();
-    
+
     // Populate category and subCategory for response
     await savedProduct.populate('category subCategory');
-    
+
     res.status(201).json({
       success: true,
       message: "Product created successfully",
@@ -258,7 +281,7 @@ export const createProduct = async (req, res) => {
         deleteImageFile('products', file.filename);
       });
     }
-    
+
     if (error.code === 11000) {
       // Duplicate key error
       const duplicateField = Object.keys(error.keyPattern)[0];
@@ -267,21 +290,29 @@ export const createProduct = async (req, res) => {
         message: `Product with this ${duplicateField} already exists`
       });
     }
-    
+
     if (error.name === 'ValidationError') {
       const validationErrors = {};
       Object.keys(error.errors).forEach(key => {
         validationErrors[key] = error.errors[key].message;
       });
-      
+
       return res.status(400).json({
         success: false,
         message: "Validation failed",
         errors: validationErrors
       });
     }
-    
-    res.status(500).json({ 
+
+    // Custom error message handling
+    if (error.message.includes('Percentage discount cannot exceed 100%')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.status(500).json({
       success: false,
       message: "Internal server error",
       error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
@@ -289,20 +320,21 @@ export const createProduct = async (req, res) => {
   }
 };
 
-// ################ version 2 optimizeed product fetch performance and filtering with existing rolebase access ################
+// ################ version 2 optimized product fetch performance and filtering with existing rolebase access ################
 export const getProducts = async (req, res) => {
   try {
-    const { 
-      page = 1, 
+    const {
+      page = 1,
       limit = 12, // ফ্রন্টএন্ড থেকে আসা limit, default 12 
-      search, 
-      category, 
-      minPrice, 
-      maxPrice, 
-      inStock, 
-      onSale, 
+      search,
+      category,
+      minPrice,
+      maxPrice,
+      inStock,
+      onSale,
       sortBy = 'createdAt', // Sorting field, default: createdAt
-      sortOrder = 'desc'   // Sorting order, default: desc
+      sortOrder = 'desc',   // Sorting order, default: desc
+      discountType
     } = req.query;
 
     const limitInt = parseInt(limit);
@@ -315,11 +347,11 @@ export const getProducts = async (req, res) => {
     // ক্যাটেগরি ফিল্টার
     if (category) {
       filter.$or = [
-        { category: category }, 
+        { category: category },
         { subCategory: category }
       ];
     }
-    
+
     // দামের ফিল্টার
     if (minPrice || maxPrice) {
       filter.price = {};
@@ -332,12 +364,15 @@ export const getProducts = async (req, res) => {
       filter.stock = { $gt: 0 };
     }
 
-    // সেলের ফিল্টার: discountPercentage > 0 এবং বর্তমান ডিসকাউন্ট পিরিয়ডের মধ্যে
+    // সেলের ফিল্টার: নতুন discount system অনুযায়ী
     if (onSale === 'true') {
-      const now = new Date();
-      filter.discountPercentage = { $gt: 0 };
-      filter.discountStart = { $lte: now };
-      filter.discountEnd = { $gte: now };
+      filter.discountType = { $ne: "none" };
+      filter.discountValue = { $gt: 0 };
+    }
+
+    // Discount type filter
+    if (discountType && discountType !== "all") {
+      filter.discountType = discountType;
     }
 
     // ২. সার্চ অপটিমাইজেশন (Text Search)
@@ -358,12 +393,12 @@ export const getProducts = async (req, res) => {
     // ৪. কোয়েরি চালানো এবং প্রোজেকশন
     const products = await Product.find(filter)
       // ✅ প্রোজেকশন: দ্রুত লোডিং-এর জন্য শুধুমাত্র প্রয়োজনীয় ফিল্ড সিলেক্ট করুন
-      .select('name slug price basePrice discountPercentage imageGroups averageRating numReviews stock hasVariants category subCategory') 
-      
+      .select('name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory')
+
       // ✅ পপুলেশন অপটিমাইজেশন: ক্যাটেগরি থেকে শুধু নাম ও স্ল্যাগ লোড করুন 
       .populate({
         path: "category",
-        select: 'name slug parentCategory', 
+        select: 'name slug parentCategory',
         populate: {
           path: "parentCategory",
           select: 'name slug parentCategory',
@@ -379,15 +414,34 @@ export const getProducts = async (req, res) => {
           populate: { path: "parentCategory", select: 'name slug' }
         }
       })
-      
+
       .sort(sortOptions)
       .skip(skip)
       .limit(limitInt);
-      
+
+    // Calculate discount amount for each product
+    const productsWithDiscount = products.map(product => {
+      const productObj = product.toObject();
+
+      // Calculate discount amount based on type
+      let discountAmount = 0;
+      if (productObj.discountType === "percentage") {
+        discountAmount = (productObj.basePrice * productObj.discountValue) / 100;
+      } else if (productObj.discountType === "fixed") {
+        discountAmount = productObj.discountValue;
+      }
+
+      return {
+        ...productObj,
+        discountAmount,
+        isOnSale: productObj.discountType !== "none" && productObj.discountValue > 0
+      };
+    });
+
     // ৫. রেসপন্স পাঠানো
     res.status(200).json({
       success: true,
-      products,
+      products: productsWithDiscount,
       total: totalProducts,
       totalPages: totalPages,
       currentPage: pageInt,
@@ -413,7 +467,8 @@ export const getAdminProducts = async (req, res) => {
       search,
       category,
       sortBy = "createdAt",
-      sortOrder = "desc"
+      sortOrder = "desc",
+      discountType
     } = req.query;
 
     // Build filter object - NO isActive filter for admin
@@ -425,6 +480,7 @@ export const getAdminProducts = async (req, res) => {
         { name: { $regex: searchRegex } },
         { brand: { $regex: searchRegex } },
         { slug: { $regex: searchRegex } },
+        { sku: { $regex: searchRegex } }
       ];
     }
 
@@ -432,7 +488,10 @@ export const getAdminProducts = async (req, res) => {
       filter.category = category;
     }
 
-    // Admin sees everything - no isActive filter
+    // Discount type filter for admin
+    if (discountType && discountType !== "all") {
+      filter.discountType = discountType;
+    }
 
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === "desc" ? -1 : 1;
@@ -462,79 +521,18 @@ export const getAdminProducts = async (req, res) => {
   }
 };
 
-// Get a single product by ID
-export const getProductById = async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id)
-      .populate("category subCategory")
-      .populate("reviews.user", "name email");
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found"
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      product
-    });
-  } catch (error) {
-    if (error.name === "CastError") {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid product ID"
-      });
-    }
-    res.status(500).json({
-      success: false,
-      message: "Error fetching product",
-      error: error.message
-    });
-  }
-};
-
-// Get a single product by slug
-export const getProductBySlug = async (req, res) => {
-  try {
-    const product = await Product.findOne({ slug: req.params.slug })
-      .populate("category subCategory")
-      .populate("reviews.user", "name email");
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found"
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      product
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error fetching product",
-      error: error.message
-    });
-  }
-};
-
-// ################ version 3 utc time conversation supported for bangladesh to mongobd database ################
+// ################ version 3 updated for new discount system ################
 export const updateProduct = async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        errors: errors.array() 
+        errors: errors.array()
       });
     }
 
-
-const existingProduct = await Product.findById(req.params.id);
+    const existingProduct = await Product.findById(req.params.id);
     if (req.file) {
       if (existingProduct.mainImage) {
         const oldFilename = existingProduct.mainImage.split('/').pop();
@@ -543,16 +541,14 @@ const existingProduct = await Product.findById(req.params.id);
       req.body.mainImage = `${process.env.BASE_URL || "http://localhost:5000"}/uploads/products/${req.file.filename}`;
     }
 
-
     let finalImages = existingProduct.images || [];
     if (req.body.existingImages) {
-      const keptImages = Array.isArray(req.body.existingImages) 
-        ? req.body.existingImages 
+      const keptImages = Array.isArray(req.body.existingImages)
+        ? req.body.existingImages
         : JSON.parse(req.body.existingImages);
 
-
       const imagesToDelete = existingProduct.images.filter(img => !keptImages.includes(img));
-      
+
       imagesToDelete.forEach(imgUrl => {
         const filename = imgUrl.split('/').pop();
         deleteImageFile('products', filename);
@@ -561,9 +557,8 @@ const existingProduct = await Product.findById(req.params.id);
       finalImages = keptImages;
     }
 
-
     if (req.files && req.files.length > 0) {
-      const newUploadedImages = req.files.map(file => 
+      const newUploadedImages = req.files.map(file =>
         `${process.env.BASE_URL || "http://localhost:5000"}/uploads/products/${file.filename}`
       );
       finalImages = [...finalImages, ...newUploadedImages];
@@ -571,20 +566,27 @@ const existingProduct = await Product.findById(req.params.id);
 
     req.body.images = finalImages;
 
-
-
-
+    // Parse numeric fields with new discount system
     const productData = {
       ...req.body,
       basePrice: parseFloat(req.body.basePrice) || 0,
-      discountPercentage: parseFloat(req.body.discountPercentage) || 0,
+      discountType: req.body.discountType || "none",
+      discountValue: parseFloat(req.body.discountValue) || 0,
       stock: parseInt(req.body.stock) || 0,
       lowStockAlert: parseInt(req.body.lowStockAlert) || 5,
       weight: parseFloat(req.body.weight) || 0,
       aplusContent: req.body.aplusContent || '',
       bulletPoints: Array.isArray(req.body.bulletPoints) ? req.body.bulletPoints : [],
     };
-    
+
+    // Validate discount value based on type
+    if (productData.discountType === "percentage" && productData.discountValue > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Percentage discount cannot exceed 100%'
+      });
+    }
+
     if (req.body.dimensions) {
       productData.dimensions = {
         length: parseFloat(req.body.dimensions.length) || 0,
@@ -593,26 +595,11 @@ const existingProduct = await Product.findById(req.params.id);
       };
     }
 
-    // Handle main product discount dates - UTC হিসেবে স্টোর
-    if (req.body.discountStart) {
-      const startDate = new Date(req.body.discountStart);
-      productData.discountStart = isNaN(startDate.getTime()) ? null : startDate;
-    } else {
-      productData.discountStart = null;
-    }
-
-    if (req.body.discountEnd) {
-      const endDate = new Date(req.body.discountEnd);
-      productData.discountEnd = isNaN(endDate.getTime()) ? null : endDate;
-    } else {
-      productData.discountEnd = null;
-    }
-
-    // UNIVERSAL VARIANT HANDLING
+    // UNIVERSAL VARIANT HANDLING - updated for new discount system
     if (req.body.hasVariants && req.body.variantOptions && Array.isArray(req.body.variantOptions)) {
       productData.hasVariants = true;
       productData.variantOptions = req.body.variantOptions;
-      
+
       // Function to generate all possible combinations for ANY variant options
       const generateAllVariants = (variantOptions, baseData = {}) => {
         if (!variantOptions || variantOptions.length === 0) return [];
@@ -637,14 +624,14 @@ const existingProduct = await Product.findById(req.params.id);
         };
 
         const allCombinations = generateCombinations(variantOptions);
-        
+
         return allCombinations.map((combination, index) => {
           const existingVariant = req.body.variants?.find(manualVariant => {
             if (!manualVariant.options || manualVariant.options.length !== combination.length) {
               return false;
             }
-            return combination.every(combOpt => 
-              manualVariant.options.some(manualOpt => 
+            return combination.every(combOpt =>
+              manualVariant.options.some(manualOpt =>
                 manualOpt.name === combOpt.name && manualOpt.value === combOpt.value
               )
             );
@@ -653,9 +640,8 @@ const existingProduct = await Product.findById(req.params.id);
           return {
             options: combination,
             basePrice: existingVariant?.basePrice || baseData.basePrice || productData.basePrice || 0,
-            discountPercentage: existingVariant?.discountPercentage || baseData.discountPercentage || productData.discountPercentage || 0,
-            discountStart: existingVariant?.discountStart || baseData.discountStart || productData.discountStart,
-            discountEnd: existingVariant?.discountEnd || baseData.discountEnd || productData.discountEnd,
+            discountType: existingVariant?.discountType || baseData.discountType || productData.discountType || "none",
+            discountValue: existingVariant?.discountValue || baseData.discountValue || productData.discountValue || 0,
             stock: existingVariant?.stock || 0,
             imageGroupName: existingVariant?.imageGroupName || '',
             sku: existingVariant?.sku || `${productData.sku || 'PROD'}-${index + 1}`
@@ -667,46 +653,58 @@ const existingProduct = await Product.findById(req.params.id);
       if (req.body.variants && Array.isArray(req.body.variants) && req.body.variants.length > 0) {
         console.log('Using manually provided variants');
         productData.variants = req.body.variants.map(variant => {
-          let variantDiscountStart = null;
-          let variantDiscountEnd = null;
-          
-          if (variant.discountStart) {
-            const startDate = new Date(variant.discountStart);
-            variantDiscountStart = isNaN(startDate.getTime()) ? null : startDate;
+          if (variant.discountType === "percentage" && variant.discountValue > 100) {
+            throw new Error(`Variant percentage discount cannot exceed 100%`);
           }
-          
-          if (variant.discountEnd) {
-            const endDate = new Date(variant.discountEnd);
-            variantDiscountEnd = isNaN(endDate.getTime()) ? null : endDate;
-          }
-
           const variantBasePrice = parseFloat(variant.basePrice) || parseFloat(productData.basePrice) || 0;
-          const variantDiscountPercentage = parseFloat(variant.discountPercentage) || 0;
-          
+          const variantDiscountType = variant.discountType || productData.discountType || "none";
+          const variantDiscountValue = parseFloat(variant.discountValue) || 0;
+
+          let variantPrice = variantBasePrice;
+          if (variantDiscountType !== "none" && variantDiscountValue > 0) {
+            variantPrice = calculatePrice(variantBasePrice, variantDiscountType, variantDiscountValue);
+          } else if (productData.discountType !== "none" && productData.discountValue > 0) {
+            variantPrice = calculatePrice(variantBasePrice, productData.discountType, productData.discountValue);
+          }
           return {
             options: Array.isArray(variant.options) ? variant.options.map(opt => ({
               name: opt.name,
               value: opt.value,
             })) : [],
-            
+
             basePrice: variantBasePrice,
-            discountPercentage: variantDiscountPercentage,
-            discountStart: variantDiscountStart,
-            discountEnd: variantDiscountEnd,
+            discountType: variantDiscountType,
+            discountValue: variantDiscountValue,
+            price: variantPrice, 
             stock: parseInt(variant.stock) || 0,
             imageGroupName: variant.imageGroupName || '',
             sku: variant.sku || ''
           };
         });
-      } 
+      }
       // CASE 2: No manual variants - auto-generate ALL possible combinations
       else {
         console.log('Auto-generating all variant combinations');
         productData.variants = generateAllVariants(req.body.variantOptions, {
           basePrice: productData.basePrice,
-          discountPercentage: productData.discountPercentage,
-          discountStart: productData.discountStart,
-          discountEnd: productData.discountEnd
+          discountType: productData.discountType,
+          discountValue: productData.discountValue
+        });
+        productData.variants = productData.variants.map(variant => {
+          const variantBasePrice = variant.basePrice || productData.basePrice || 0;
+          const variantDiscountType = variant.discountType || productData.discountType || "none";
+          const variantDiscountValue = variant.discountValue || productData.discountValue || 0;
+
+          let variantPrice = variantBasePrice;
+          if (variantDiscountType !== "none" && variantDiscountValue > 0) {
+            variantPrice = calculatePrice(variantBasePrice, variantDiscountType, variantDiscountValue);
+          } else if (productData.discountType !== "none" && productData.discountValue > 0) {
+            variantPrice = calculatePrice(variantBasePrice, productData.discountType, productData.discountValue);
+          }
+          return {
+            ...variant,
+            price: variantPrice
+          };
         });
       }
     } else {
@@ -760,6 +758,15 @@ const existingProduct = await Product.findById(req.params.id);
         message: "Product with this SKU or slug already exists"
       });
     }
+
+    // Custom error message handling
+    if (error.message.includes('Percentage discount cannot exceed 100%')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: "Error updating product",
@@ -768,6 +775,89 @@ const existingProduct = await Product.findById(req.params.id);
   }
 };
 
+// Get a single product by ID
+export const getProductById = async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id)
+      .populate("category subCategory")
+      .populate("reviews.user", "name email");
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    // Calculate discount amount
+    let discountAmount = 0;
+    if (product.discountType === "percentage") {
+      discountAmount = (product.basePrice * product.discountValue) / 100;
+    } else if (product.discountType === "fixed") {
+      discountAmount = product.discountValue;
+    }
+
+    const productObj = product.toObject();
+    productObj.discountAmount = discountAmount;
+    productObj.isOnSale = product.discountType !== "none" && product.discountValue > 0;
+
+    res.status(200).json({
+      success: true,
+      product: productObj
+    });
+  } catch (error) {
+    if (error.name === "CastError") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product ID"
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: "Error fetching product",
+      error: error.message
+    });
+  }
+};
+
+// Get a single product by slug
+export const getProductBySlug = async (req, res) => {
+  try {
+    const product = await Product.findOne({ slug: req.params.slug })
+      .populate("category subCategory")
+      .populate("reviews.user", "name email");
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    // Calculate discount amount
+    let discountAmount = 0;
+    if (product.discountType === "percentage") {
+      discountAmount = (product.basePrice * product.discountValue) / 100;
+    } else if (product.discountType === "fixed") {
+      discountAmount = product.discountValue;
+    }
+
+    const productObj = product.toObject();
+    productObj.discountAmount = discountAmount;
+    productObj.isOnSale = product.discountType !== "none" && product.discountValue > 0;
+
+    res.status(200).json({
+      success: true,
+      product: productObj
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching product",
+      error: error.message
+    });
+  }
+};
 
 // Delete a product
 export const deleteProduct = async (req, res) => {
@@ -826,10 +916,10 @@ export const deleteProduct = async (req, res) => {
 export const addReview = async (req, res) => {
   try {
     const { rating, comment } = req.body;
-    const userId = req.user._id; 
+    const userId = req.user._id;
 
     const product = await Product.findById(req.params.id);
-    
+
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -858,8 +948,8 @@ export const addReview = async (req, res) => {
 
     // Update average rating and number of reviews
     product.numReviews = product.reviews.length;
-    product.averageRating = 
-      product.reviews.reduce((acc, item) => item.rating + acc, 0) / 
+    product.averageRating =
+      product.reviews.reduce((acc, item) => item.rating + acc, 0) /
       product.reviews.length;
 
     await product.save();
@@ -888,16 +978,33 @@ export const addReview = async (req, res) => {
 // Get featured products
 export const getFeaturedProducts = async (req, res) => {
   try {
-    const products = await Product.find({ 
-      isFeatured: true, 
-      isActive: true 
+    const products = await Product.find({
+      isFeatured: true,
+      isActive: true
     })
-    .populate("category subCategory")
-    .limit(10);
+      .populate("category subCategory")
+      .limit(10);
+
+    // Calculate discount amounts
+    const productsWithDiscount = products.map(product => {
+      const productObj = product.toObject();
+
+      let discountAmount = 0;
+      if (productObj.discountType === "percentage") {
+        discountAmount = (productObj.basePrice * productObj.discountValue) / 100;
+      } else if (productObj.discountType === "fixed") {
+        discountAmount = productObj.discountValue;
+      }
+
+      productObj.discountAmount = discountAmount;
+      productObj.isOnSale = productObj.discountType !== "none" && productObj.discountValue > 0;
+
+      return productObj;
+    });
 
     res.status(200).json({
       success: true,
-      products
+      products: productsWithDiscount
     });
   } catch (error) {
     res.status(500).json({
@@ -912,9 +1019,9 @@ export const getFeaturedProducts = async (req, res) => {
 export const updateStock = async (req, res) => {
   try {
     const { quantity } = req.body;
-    
+
     const product = await Product.findById(req.params.id);
-    
+
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -923,7 +1030,7 @@ export const updateStock = async (req, res) => {
     }
 
     product.stock += quantity;
-    
+
     await product.save();
 
     res.status(200).json({
@@ -996,7 +1103,7 @@ export const getProductsByAttributes = async (req, res) => {
         { subCategory: category }
       ];
     }
-    
+
     if (minPrice || maxPrice) {
       filter.price = {};
       if (minPrice) filter.price.$gte = parseFloat(minPrice);
@@ -1007,11 +1114,10 @@ export const getProductsByAttributes = async (req, res) => {
       filter.stock = { $gt: 0 };
     }
 
+    // Updated onSale filter
     if (onSale === 'true') {
-      const now = new Date();
-      filter.discountPercentage = { $gt: 0 };
-      filter.discountStart = { $lte: now };
-      filter.discountEnd = { $gte: now };
+      filter.discountType = { $ne: "none" };
+      filter.discountValue = { $gt: 0 };
     }
 
     // ২. সার্চ অপটিমাইজেশন
@@ -1031,7 +1137,7 @@ export const getProductsByAttributes = async (req, res) => {
 
     // ৪. কোয়েরি চালানো এবং প্রোজেকশন
     const products = await Product.find(filter)
-      .select('name slug price basePrice discountPercentage imageGroups averageRating numReviews stock hasVariants category subCategory attributes')
+      .select('name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory attributes')
       .populate({
         path: "category",
         select: 'name slug parentCategory',
@@ -1054,10 +1160,27 @@ export const getProductsByAttributes = async (req, res) => {
       .skip(skip)
       .limit(limitInt);
 
+    // Calculate discount amounts
+    const productsWithDiscount = products.map(product => {
+      const productObj = product.toObject();
+
+      let discountAmount = 0;
+      if (productObj.discountType === "percentage") {
+        discountAmount = (productObj.basePrice * productObj.discountValue) / 100;
+      } else if (productObj.discountType === "fixed") {
+        discountAmount = productObj.discountValue;
+      }
+
+      productObj.discountAmount = discountAmount;
+      productObj.isOnSale = productObj.discountType !== "none" && productObj.discountValue > 0;
+
+      return productObj;
+    });
+
     // ৫. রেসপন্স পাঠানো
     res.status(200).json({
       success: true,
-      products,
+      products: productsWithDiscount,
       total: totalProducts,
       totalPages: totalPages,
       currentPage: pageInt,
@@ -1163,7 +1286,7 @@ export const getProductsByMultipleAttributes = async (req, res) => {
 
     // কোয়েরি চালানো
     const products = await Product.find(filter)
-      .select('name slug price basePrice discountPercentage imageGroups averageRating numReviews stock hasVariants category subCategory attributes')
+      .select('name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory attributes')
       .populate({
         path: "category",
         select: 'name slug'
@@ -1176,9 +1299,26 @@ export const getProductsByMultipleAttributes = async (req, res) => {
       .skip(skip)
       .limit(limitInt);
 
+    // Calculate discount amounts
+    const productsWithDiscount = products.map(product => {
+      const productObj = product.toObject();
+
+      let discountAmount = 0;
+      if (productObj.discountType === "percentage") {
+        discountAmount = (productObj.basePrice * productObj.discountValue) / 100;
+      } else if (productObj.discountType === "fixed") {
+        discountAmount = productObj.discountValue;
+      }
+
+      productObj.discountAmount = discountAmount;
+      productObj.isOnSale = productObj.discountType !== "none" && productObj.discountValue > 0;
+
+      return productObj;
+    });
+
     res.status(200).json({
       success: true,
-      products,
+      products: productsWithDiscount,
       total: totalProducts,
       totalPages: totalPages,
       currentPage: pageInt,
@@ -1196,13 +1336,14 @@ export const getProductsByMultipleAttributes = async (req, res) => {
   }
 };
 
+// Get products for dynamic section
 export const getProductsForDynamicSection = async (req, res) => {
   try {
     const { sectionId } = req.params;
-    
+
     // Find the section
     const section = await DynamicSection.findById(sectionId);
-    
+
     if (!section) {
       return res.status(404).json({
         success: false,
@@ -1224,8 +1365,8 @@ export const getProductsForDynamicSection = async (req, res) => {
     }
 
     // Build filter based on section configuration
-    let filter = { 
-      isActive: true 
+    let filter = {
+      isActive: true
     };
 
     // Attribute based filtering
@@ -1244,11 +1385,28 @@ export const getProductsForDynamicSection = async (req, res) => {
 
     // Execute query
     const products = await Product.find(filter)
-      .select('name slug price basePrice discountPercentage imageGroups averageRating numReviews stock hasVariants')
+      .select('name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants')
       .populate("category", "name slug")
       .populate("subCategory", "name slug")
       .sort(sortOptions)
       .limit(section.productLimit);
+
+    // Calculate discount amounts
+    const productsWithDiscount = products.map(product => {
+      const productObj = product.toObject();
+
+      let discountAmount = 0;
+      if (productObj.discountType === "percentage") {
+        discountAmount = (productObj.basePrice * productObj.discountValue) / 100;
+      } else if (productObj.discountType === "fixed") {
+        discountAmount = productObj.discountValue;
+      }
+
+      productObj.discountAmount = discountAmount;
+      productObj.isOnSale = productObj.discountType !== "none" && productObj.discountValue > 0;
+
+      return productObj;
+    });
 
     res.status(200).json({
       success: true,
@@ -1260,7 +1418,7 @@ export const getProductsForDynamicSection = async (req, res) => {
         textColor: section.textColor,
         productLimit: section.productLimit
       },
-      products,
+      products: productsWithDiscount,
       totalProducts: products.length
     });
 
@@ -1278,14 +1436,14 @@ export const getProductsForDynamicSection = async (req, res) => {
 export const getHomepageSections = async (req, res) => {
   try {
     console.log('Fetching homepage sections...');
-    
+
     const sections = await DynamicSection.find({
       isActive: true,
       showInHomepage: true
     })
-    .sort({ displayOrder: 1, createdAt: -1 })
-    .select('title description attributeKey attributeValue productLimit backgroundColor textColor sectionType sortBy sortOrder isActive displayOrder showInHomepage') // ✅ isActive যোগ করুন
-    .lean();
+      .sort({ displayOrder: 1, createdAt: -1 })
+      .select('title description attributeKey attributeValue productLimit backgroundColor textColor sectionType sortBy sortOrder isActive displayOrder showInHomepage')
+      .lean();
 
     console.log('Found sections:', sections.length);
 
@@ -1293,9 +1451,9 @@ export const getHomepageSections = async (req, res) => {
     const sectionsWithProducts = await Promise.all(
       sections.map(async (section) => {
         let filter = { isActive: true };
-        
+
         console.log(`Processing section: ${section.title} - ${section.attributeKey}=${section.attributeValue}, Active: ${section.isActive}`);
-        
+
         if (section.sectionType === "attribute-based") {
           filter['attributes'] = {
             $elemMatch: {
@@ -1309,20 +1467,36 @@ export const getHomepageSections = async (req, res) => {
         sortOptions[section.sortBy || 'createdAt'] = (section.sortOrder || 'desc') === "asc" ? 1 : -1;
 
         const products = await Product.find(filter)
-          .select('name slug price basePrice discountPercentage imageGroups averageRating numReviews stock hasVariants')
+          .select('name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants')
           .populate("category", "name slug")
           .populate("subCategory", "name slug")
           .sort(sortOptions)
           .limit(section.productLimit || 8)
           .lean();
 
+        // Calculate discount amounts
+        const productsWithDiscount = products.map(product => {
+          let discountAmount = 0;
+          if (product.discountType === "percentage") {
+            discountAmount = (product.basePrice * product.discountValue) / 100;
+          } else if (product.discountType === "fixed") {
+            discountAmount = product.discountValue;
+          }
+
+          return {
+            ...product,
+            discountAmount,
+            isOnSale: product.discountType !== "none" && product.discountValue > 0
+          };
+        });
+
         console.log(`Found ${products.length} products for section: ${section.title}`);
 
         return {
           ...section,
-          products,
+          products: productsWithDiscount,
           totalProducts: products.length,
-          isActive: section.isActive !== undefined ? section.isActive : true // ✅ ডিফল্ট ভ্যালু
+          isActive: section.isActive !== undefined ? section.isActive : true
         };
       })
     );
@@ -1511,7 +1685,7 @@ export const toggleSectionStatus = async (req, res) => {
     const { sectionId } = req.params;
 
     const section = await DynamicSection.findById(sectionId);
-    
+
     if (!section) {
       return res.status(404).json({
         success: false,
@@ -1550,11 +1724,141 @@ export const searchProductsForAdmin = async (req, res) => {
         { sku: { $regex: q, $options: 'i' } },
       ],
     })
-    .select('_id name basePrice price variants hasVariants imageGroups mainImage sku')
-    .limit(20);
-    
-    res.status(200).json({ success: true, products });
+      .select('_id name basePrice discountType discountValue price variants hasVariants imageGroups mainImage sku')
+      .limit(20);
+
+    // Calculate discount amounts
+    const productsWithDiscount = products.map(product => {
+      const productObj = product.toObject();
+
+      let discountAmount = 0;
+      if (productObj.discountType === "percentage") {
+        discountAmount = (productObj.basePrice * productObj.discountValue) / 100;
+      } else if (productObj.discountType === "fixed") {
+        discountAmount = productObj.discountValue;
+      }
+
+      productObj.discountAmount = discountAmount;
+      productObj.isOnSale = productObj.discountType !== "none" && productObj.discountValue > 0;
+
+      return productObj;
+    });
+
+    res.status(200).json({ success: true, products: productsWithDiscount });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error during product search' });
+  }
+};
+
+// New: Bulk update product discounts
+export const bulkUpdateDiscounts = async (req, res) => {
+  try {
+    const { productIds, discountType, discountValue } = req.body;
+
+    if (!Array.isArray(productIds) || productIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide product IDs"
+      });
+    }
+
+    if (discountType === "percentage" && discountValue > 100) {
+      return res.status(400).json({
+        success: false,
+        message: "Percentage discount cannot exceed 100%"
+      });
+    }
+
+    // Update multiple products
+    const result = await Product.updateMany(
+      { _id: { $in: productIds } },
+      {
+        discountType: discountType || "none",
+        discountValue: parseFloat(discountValue) || 0
+      }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Discounts updated for ${result.modifiedCount} products`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('Error bulk updating discounts:', error);
+    res.status(500).json({
+      success: false,
+      message: "Error bulk updating discounts",
+      error: error.message
+    });
+  }
+};
+
+// New: Get products with specific discount type
+export const getProductsByDiscountType = async (req, res) => {
+  try {
+    const { discountType, page = 1, limit = 12 } = req.query;
+
+    if (!discountType || !["percentage", "fixed"].includes(discountType)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid discount type. Must be 'percentage' or 'fixed'"
+      });
+    }
+
+    const limitInt = parseInt(limit);
+    const pageInt = parseInt(page);
+    const skip = (pageInt - 1) * limitInt;
+
+    const filter = {
+      isActive: true,
+      discountType: discountType,
+      discountValue: { $gt: 0 }
+    };
+
+    const totalProducts = await Product.countDocuments(filter);
+    const totalPages = Math.ceil(totalProducts / limitInt);
+
+    const products = await Product.find(filter)
+      .select('name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants')
+      .populate("category", "name slug")
+      .populate("subCategory", "name slug")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitInt);
+
+    // Calculate discount amounts
+    const productsWithDiscount = products.map(product => {
+      const productObj = product.toObject();
+
+      let discountAmount = 0;
+      if (productObj.discountType === "percentage") {
+        discountAmount = (productObj.basePrice * productObj.discountValue) / 100;
+      } else if (productObj.discountType === "fixed") {
+        discountAmount = productObj.discountValue;
+      }
+
+      productObj.discountAmount = discountAmount;
+      productObj.isOnSale = true;
+
+      return productObj;
+    });
+
+    res.status(200).json({
+      success: true,
+      products: productsWithDiscount,
+      total: totalProducts,
+      totalPages: totalPages,
+      currentPage: pageInt,
+      limit: limitInt,
+      discountType: discountType
+    });
+
+  } catch (error) {
+    console.error("Error fetching products by discount type:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching products",
+      error: error.message
+    });
   }
 };
