@@ -84,7 +84,7 @@ const productSchema = new mongoose.Schema(
     bulletPoints: [{
       type: String,
       trim: true,
-      maxlength: [200, "Bullet point cannot exceed 200 characters"]
+      maxlength: [1700, "Bullet point cannot exceed 1700 characters"]
     }],
     brand: { type: String, trim: true, default: "Generic" },
     sku: { type: String, unique: true, sparse: true },
@@ -250,13 +250,11 @@ productSchema.pre("save", function (next) {
     this.price = this.basePrice;
   }
 
-  // Variant price calculation - IMPORTANT FIX
+  // Variant price calculation - IMPORTANT
   if (this.hasVariants && this.variants && this.variants.length > 0) {
     this.variants = this.variants.map((variant) => {
       const variantBasePrice = variant.basePrice || this.basePrice;
-      
       let variantPrice = variantBasePrice; // Default price
-      
       // Use variant discount if available
       if (variant.discountType && variant.discountType !== "none" && variant.discountValue > 0) {
         variantPrice = calculatePrice(
@@ -265,7 +263,7 @@ productSchema.pre("save", function (next) {
           variant.discountValue
         );
       } 
-      // Otherwise use product discount if available
+      // Otherwise use product discount if available 
       else if (this.discountType !== "none" && this.discountValue > 0) {
         variantPrice = calculatePrice(
           variantBasePrice,
@@ -273,7 +271,6 @@ productSchema.pre("save", function (next) {
           this.discountValue
         );
       }
-
       // Return variant with calculated price
       return {
         ...variant,
